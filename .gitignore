@@ -5,4 +5,5 @@ crash.log
 *.tfvars
 *.tfvars.example
 *.tfvars.json
+*.DS_Store
 !.terraform.lock.hcl
