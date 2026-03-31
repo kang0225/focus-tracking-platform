@@ -1,7 +1,10 @@
 # focus-tracking-platform
 하드웨어 장치와 웹캠 트래킹을 활용한 집중도 분석 플랫폼
 
-```
+
+## Architecture Diagram
+
+```mermaid
 graph TD
     User["사용자"] --> CF["CloudFront"]
     CF --> S3FE["S3 (정적 프론트엔드)"]
