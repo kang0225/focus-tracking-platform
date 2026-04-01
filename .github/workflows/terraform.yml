@@ -3,6 +3,8 @@ name: Terraform
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'terraform/environments/dev/**'
 
 permissions:
   id-token: write
@@ -12,12 +14,16 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./terraform/environments/dev
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: AWS 인증 (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ap-northeast-2
@@ -30,4 +36,7 @@ jobs:
 
       - name: Terraform Plan
         run: terraform plan
-        
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
