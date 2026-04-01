@@ -48,16 +48,8 @@ resource "aws_dynamodb_table" "terraform_lock_table" {
 }
 
 # GitHub Actions를 위한 OIDC 인증 (변경금지)
-resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
-  url = "https://token.actions.githubusercontent.com" # OIDC 공식주소
-
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1" # SSL 인증서지문
-  ]
+data "aws_iam_openid_connect_provider" "github_oidc_provider" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # GitHub Actions의 OIDC토큰의 IAM 역할 정의
@@ -71,7 +63,7 @@ data "aws_iam_policy_document" "github_actions_assume_role_policy" {
 
     principals {
       type        = "Federated" # 외부 인증 (OIDC)
-      identifiers = [aws_iam_openid_connect_provider.github_oidc_provider.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github_oidc_provider.arn]
     }
 
     condition {

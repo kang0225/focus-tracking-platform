@@ -1,6 +1,6 @@
 provider "aws" {
   region = var.aws_region
-  profile = "mac-mini"
+  profile = "admin"
 
   default_tags {
     tags = {
