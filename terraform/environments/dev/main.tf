@@ -210,3 +210,12 @@ resource "aws_security_group_rule" "data_egress_all" {
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.data_sg.id
 }
+
+resource "aws_security_group_rule" "data_egress_to_web" {
+  type                     = "egress"
+  from_port                = 3000
+  to_port                  = 3000
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.web_sg.id # 목적지: Web SG
+  security_group_id        = aws_security_group.data_sg.id # 출발지: Data SG
+}
