@@ -8,7 +8,7 @@ output "terraform_state_bucket_name" {
 }
 
 output "terraform_lock_table_name" {
-  description = "DynamoDB Lock 테이블이름"
+  description = "DynamoDB Lock 테이블이름",
   value       = aws_dynamodb_table.terraform_lock_table.name
 }
 
