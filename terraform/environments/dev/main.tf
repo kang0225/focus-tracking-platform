@@ -95,40 +95,48 @@ resource "aws_subnet" "private_db_c" {
     Type = "private-db"
   }
 }
+#########################
+#### Security Groups ####
+#########################
 
-# ==========================================
-# 1. 보안 그룹 본체 정의 (껍데기)
-# ==========================================
-
-# ALB 보안 그룹
+# 1. ALB 보안 그룹 (관문)
 resource "aws_security_group" "alb_sg" {
-  name        = "ft-alb-sg"
+  name        = "${var.project_name}-${var.environment}-alb-sg"
   description = "Security group for FocusTracker ALB"
-  vpc_id      = aws_vpc.main.id
-  tags        = { Name = "ft-alb-sg" }
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  }
 }
 
-# Web EC2 보안 그룹 (Interface/Signaling)
+# 2. Web EC2 보안 그룹 (인터페이스/시그널링)
 resource "aws_security_group" "web_sg" {
-  name        = "ft-web-sg"
+  name        = "${var.project_name}-${var.environment}-web-sg"
   description = "Security group for Web Interface EC2"
-  vpc_id      = aws_vpc.main.id
-  tags        = { Name = "ft-web-sg" }
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-web-sg"
+  }
 }
 
-# Data EC2 보안 그룹 (Processing/Storage)
+# 3. Data EC2 보안 그룹 (점수 수집/분석 - 8000번)
 resource "aws_security_group" "data_sg" {
-  name        = "ft-data-sg"
+  name        = "${var.project_name}-${var.environment}-data-sg"
   description = "Security group for Data Processing EC2"
-  vpc_id      = aws_vpc.main.id
-  tags        = { Name = "ft-data-sg" }
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-data-sg"
+  }
 }
 
-# ==========================================
-# 2. ALB 보안 그룹 규칙 (HTTPS 중심)
-# ==========================================
+##########################
+#### SG Rules (Rules) ####
+##########################
 
-# [Inbound] 외부 인터넷 -> ALB (HTTP/HTTPS)
+# --- ALB Rules ---
 resource "aws_security_group_rule" "alb_ingress_http" {
   type              = "ingress"
   from_port         = 80
@@ -147,7 +155,6 @@ resource "aws_security_group_rule" "alb_ingress_https" {
   security_group_id = aws_security_group.alb_sg.id
 }
 
-# [Outbound] ALB -> Web EC2 (오직 3000번 포트로만!)
 resource "aws_security_group_rule" "alb_egress_to_web" {
   type                     = "egress"
   from_port                = 3000
@@ -157,11 +164,7 @@ resource "aws_security_group_rule" "alb_egress_to_web" {
   security_group_id        = aws_security_group.alb_sg.id
 }
 
-# ==========================================
-# 3. Web EC2 보안 그룹 규칙
-# ==========================================
-
-# [Inbound] ALB -> Web EC2 (3000번 수신)
+# --- Web EC2 Rules ---
 resource "aws_security_group_rule" "web_ingress_from_alb" {
   type                     = "ingress"
   from_port                = 3000
@@ -171,7 +174,6 @@ resource "aws_security_group_rule" "web_ingress_from_alb" {
   security_group_id        = aws_security_group.web_sg.id
 }
 
-# [Outbound] Web EC2 -> Data EC2 (8000번 송신)
 resource "aws_security_group_rule" "web_egress_to_data" {
   type                     = "egress"
   from_port                = 8000
@@ -181,7 +183,6 @@ resource "aws_security_group_rule" "web_egress_to_data" {
   security_group_id        = aws_security_group.web_sg.id
 }
 
-# [Outbound] 외부 인터넷 (업데이트/라이브러리 설치용)
 resource "aws_security_group_rule" "web_egress_all" {
   type              = "egress"
   from_port         = 0
@@ -191,11 +192,7 @@ resource "aws_security_group_rule" "web_egress_all" {
   security_group_id = aws_security_group.web_sg.id
 }
 
-# ==========================================
-# 4. Data EC2 보안 그룹 규칙 (8000번 국룰)
-# ==========================================
-
-# [Inbound] Web EC2 -> Data EC2 (8000번 수신)
+# --- Data EC2 Rules ---
 resource "aws_security_group_rule" "data_ingress_from_web" {
   type                     = "ingress"
   from_port                = 8000
@@ -205,7 +202,6 @@ resource "aws_security_group_rule" "data_ingress_from_web" {
   security_group_id        = aws_security_group.data_sg.id
 }
 
-# [Outbound] 외부 인터넷 (패키지 설치 및 DB 연결용)
 resource "aws_security_group_rule" "data_egress_all" {
   type              = "egress"
   from_port         = 0
