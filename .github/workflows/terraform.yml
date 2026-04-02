@@ -10,6 +10,12 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  TF_VAR_aws_region: ap-northeast-2
+  TF_VAR_project_name: focus-tracking-platform
+  TF_VAR_environment: dev
+  TF_VAR_stack_name: main
+
 jobs:
   terraform:
     runs-on: ubuntu-latest

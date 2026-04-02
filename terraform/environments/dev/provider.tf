@@ -1,12 +1,12 @@
 provider "aws" { 
-    region = "ap-northeast-2"
+    region = var.aws_region
     
     default_tags { 
         tags = { 
-            Project = "focus-tracking-platform" 
-            Environment = "dev"
+            Project = var.project_name
+            Environment = var.environment
             ManagedBy = "terraform" 
-            Stack = "main" 
+            Stack = var.stack_name
         } 
     } 
 }
