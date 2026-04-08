@@ -49,3 +49,13 @@ variable "private_db_subnet_a_cidr" {
 variable "private_db_subnet_c_cidr" {
   type = string
 }
+
+variable "app_port" {
+  type    = number
+  default = 3000
+}
+
+variable "db_port" {
+  type    = number
+  default = 3306
+}
