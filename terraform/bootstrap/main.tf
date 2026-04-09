@@ -145,7 +145,6 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "autoscaling:*",
       "ecr:*",
       "ecs:*",
-      "iam:*",
       "logs:*",
       "cloudwatch:*",
       "route53:*",
@@ -153,7 +152,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "s3:*",
       "rds:*",
       "secretsmanager:*",
-      "kms:*"
+      "kms:*",
+
+      "iam:Get*",      # 이미 만들어진 역할 정보를 읽기만 함 (생성 불가)
+      "iam:List*",     # 역할 목록을 확인만 함 (생성 불가)
+      "iam:PassRole"   # 이미 부트스트랩으로 만든 역할을 서비스에 전달만 함
     ]
 
     resources = ["*"]
@@ -220,7 +223,6 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
   role       = aws_iam_role.web_ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-
 
 
 resource "aws_iam_instance_profile" "web_ec2_profile" {
