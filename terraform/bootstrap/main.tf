@@ -150,13 +150,10 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "route53:*",
       "acm:*",
       "s3:*",
+      "iam:*",
       "rds:*",
       "secretsmanager:*",
-      "kms:*",
-
-      "iam:Get*",      # 이미 만들어진 역할 정보를 읽기만 함 (생성 불가)
-      "iam:List*",     # 역할 목록을 확인만 함 (생성 불가)
-      "iam:PassRole"   # 이미 부트스트랩으로 만든 역할을 서비스에 전달만 함
+      "kms:*"
     ]
 
     resources = ["*"]
@@ -173,59 +170,4 @@ resource "aws_iam_policy" "github_actions_permissions_policy" {
 resource "aws_iam_role_policy_attachment" "github_actions_permissions_attachment" {
   role       = aws_iam_role.github_actions_iam_role.name
   policy_arn = aws_iam_policy.github_actions_permissions_policy.arn # 방금 생성한 IAM 정책의 주소
-}
-
-#################
-# 서비스용 IAM생성
-#################
-
-# ECS 작업 실행 역할
-# 용도: ECS가 ECR에서 이미지를 다운로드하고 로그를 기록할 때 사용
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "${var.project_name}-ecs-task-execution-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" } }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_exec_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# ECS 작업 역할
-# 용도: 우리 앱 코드가 실행 중에 S3나 Secrets Manager를 써야 할 때 사용
-resource "aws_iam_role" "ecs_task_role" {
-  name = "${var.project_name}-ecs-task-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" } }]
-  })
-}
-
-# Web EC2 전용 역할
-# 용도: EC2 서버 자체가 ECS 클러스터에 등록되고 SSM 접속을 허용할 때 사용
-resource "aws_iam_role" "web_ec2_role" {
-  name = "${var.project_name}-web-ec2-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" } }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ecs_policy" {
-  role       = aws_iam_role.web_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
-  role       = aws_iam_role.web_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-
-resource "aws_iam_instance_profile" "web_ec2_profile" {
-  name = "${var.project_name}-web-ec2-profile"
-  role = aws_iam_role.web_ec2_role.name
 }
