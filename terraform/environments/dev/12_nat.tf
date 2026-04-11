@@ -18,6 +18,4 @@ resource "aws_nat_gateway" "nat_a" {
   tags = {
     Name = "nat-gateway-a"
   }
-
-  depends_on = [aws_internet_gateway.main]
 }
