@@ -88,7 +88,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_standard" {
 ##    ECS Task Role            ##
 #################################
 
-# ECS 안에서 돌아가는 앱 자체가 AWS 자원(S3 등)을 쓸 때 필요한 역할 (이후에 추가예정)
+# ECS 안에서 돌아가는 앱 자체가 AWS 자원(S3 등)을 쓸 때 필요한 역할 (이후에 추가 예정)
 resource "aws_iam_role" "ecs_task_role" {
   name               = "${var.project_name}-${var.environment}-ecs-task-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
