@@ -1,3 +1,4 @@
+/*
 # 2개의 AZ를 사용하기 때문에, NAT 게이트웨이를 2개 설치하는 것이 이상적이지만
 # 비용 문제로 현재는 임시로 1개만 사용함.
 
@@ -19,3 +20,4 @@ resource "aws_nat_gateway" "nat_a" {
     Name = "nat-gateway-a"
   }
 }
+*/
