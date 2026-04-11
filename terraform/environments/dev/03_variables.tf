@@ -59,3 +59,9 @@ variable "db_port" {
   type    = number
   default = 3306
 }
+
+variable "instance_name" {
+  description = "EC2 이름"
+  type        = string
+  default     = "test-ec2"
+}
