@@ -35,12 +35,10 @@ resource "aws_route_table_association" "public_c" {
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.main_vpc.id
 
-  /* NAT 게이트웨이 추가 시 주석 해제
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main_nat.id << ID도 변경
+    nat_gateway_id = aws_nat_gateway.nat_a.id
   }
-  */
 
   tags = {
     Name = "${var.project_name}-${var.environment}-private-rt"
