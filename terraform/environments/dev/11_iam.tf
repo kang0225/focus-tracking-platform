@@ -41,9 +41,8 @@ resource "aws_iam_role_policy_attachment" "web_ec2_ssm" {
 # 정책 연결: ECS 컨테이너 서비스 권한
 resource "aws_iam_role_policy_attachment" "web_ec2_container" {
   role       = aws_iam_role.web_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerServiceforEC2Role"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
-
 # EC2에 입히기 위한 프로파일 생성
 resource "aws_iam_instance_profile" "web_ec2_profile" {
   name = aws_iam_role.web_ec2_role.name
