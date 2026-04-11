@@ -1,9 +1,9 @@
 ##############################
-## Ubuntu 22.04 ARM AMI 조회 ##
+## Ubuntu 22.04 AMI 조회      ##
 ##############################
 data "aws_ami" "ubuntu_2204_arm" {
   most_recent = true
-  owners      = ["099720109477"] # 공식 Ubuntu AMI ID
+  owners      = ["099720109477"]
 
   filter {
     name   = "name"
@@ -13,11 +13,6 @@ data "aws_ami" "ubuntu_2204_arm" {
   filter {
     name   = "architecture"
     values = ["arm64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
   }
 }
 
@@ -34,52 +29,32 @@ data "aws_ami" "ubuntu_2204_x86" {
     name   = "architecture"
     values = ["x86_64"]
   }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-#########################
-### SSM 접속용 IAM Role ###
-#########################
-resource "aws_iam_role" "ec2_ssm_role" {
-  name = "ec2-ssm-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
 }
 
-resource "aws_iam_role_policy_attachment" "ssm_core" {
-  role       = aws_iam_role.ec2_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+##############################################
+### 기존 IAM 프로파일 데이터 소스 ###
+##############################################
+
+# 기존에 있는 웹용 인스턴스 프로파일 정보 가져오기
+data "aws_iam_instance_profile" "web_profile" {
+  name = "focus-tracking-platform-web-ec2-profile"
 }
 
-resource "aws_iam_instance_profile" "ec2_ssm_profile" {
-  name = "ec2-ssm-profile"
-  role = aws_iam_role.ec2_ssm_role.name
+# 기존에 있는 DB용 인스턴스 프로파일 정보 가져오기
+data "aws_iam_instance_profile" "db_profile" {
+  name = "focus-tracking-platform-db-ec2-role"
 }
 
 ###############
 ### EC2 생성 ###
 ###############
+
+# 1. 앱 서버 (Web EC2)
 resource "aws_instance" "app_ec2" {
   ami                    = data.aws_ami.ubuntu_2204_arm.id
   instance_type          = "t4g.medium"
   subnet_id              = aws_subnet.private_app_a.id
-  vpc_security_group_ids = [
-    aws_security_group.web_sg.id
-  ]
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
   root_block_device {
     volume_size           = 30
@@ -88,7 +63,8 @@ resource "aws_instance" "app_ec2" {
     encrypted             = true
   }
 
-  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
+  # 웹용 프로파일 연결
+  iam_instance_profile = data.aws_iam_instance_profile.web_profile.name
 
   associate_public_ip_address = false
 
@@ -98,14 +74,12 @@ resource "aws_instance" "app_ec2" {
   }
 }
 
+# 2. DB 서버 (DB EC2)
 resource "aws_instance" "free_tier" {
   ami                    = data.aws_ami.ubuntu_2204_x86.id
   instance_type          = "t3.micro"
-
   subnet_id              = aws_subnet.private_db_a.id
-  vpc_security_group_ids = [
-    aws_security_group.db_sg.id
-  ]
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
 
   root_block_device {
     volume_size           = 30
@@ -114,8 +88,8 @@ resource "aws_instance" "free_tier" {
     encrypted             = true
   }
 
-  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
-
+  # DB 전용 프로파일 연결
+  iam_instance_profile = data.aws_iam_instance_profile.db_profile.name
 
   associate_public_ip_address = false
 
