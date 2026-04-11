@@ -65,7 +65,6 @@ resource "aws_instance" "app_ec2" {
 
   # 웹용 프로파일 연결
   iam_instance_profile = data.aws_iam_instance_profile.web_profile.name
-
   associate_public_ip_address = false
 
   tags = {
@@ -90,7 +89,6 @@ resource "aws_instance" "free_tier" {
 
   # DB 전용 프로파일 연결
   iam_instance_profile = data.aws_iam_instance_profile.db_profile.name
-
   associate_public_ip_address = false
 
   tags = {
