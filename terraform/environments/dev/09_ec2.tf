@@ -31,20 +31,6 @@ data "aws_ami" "ubuntu_2204_x86" {
   }
 }
 
-##############################################
-### 기존 IAM 프로파일 데이터 소스 ###
-##############################################
-
-# 기존에 있는 웹용 인스턴스 프로파일 정보 가져오기
-data "aws_iam_instance_profile" "web_profile" {
-  name = "focus-tracking-platform-web-ec2-profile"
-}
-
-# 기존에 있는 DB용 인스턴스 프로파일 정보 가져오기
-data "aws_iam_instance_profile" "db_profile" {
-  name = "focus-tracking-platform-db-ec2-role"
-}
-
 ###############
 ### EC2 생성 ###
 ###############
@@ -64,7 +50,7 @@ resource "aws_instance" "app_ec2" {
   }
 
   # 웹용 프로파일 연결
-  iam_instance_profile = data.aws_iam_instance_profile.web_profile.name
+  iam_instance_profile = aws_iam_instance_profile.web_ec2_profile.name
   associate_public_ip_address = false
 
   tags = {
@@ -88,7 +74,7 @@ resource "aws_instance" "free_tier" {
   }
 
   # DB 전용 프로파일 연결
-  iam_instance_profile = data.aws_iam_instance_profile.db_profile.name
+  iam_instance_profile = aws_iam_instance_profile.db_ec2_profile.name
   associate_public_ip_address = false
 
   tags = {
