@@ -26,12 +26,12 @@ resource "aws_security_group" "web_sg" {
 
 # 3. Data EC2 
 resource "aws_security_group" "db_sg" {
-  name        = "${var.project_name}-${var.environment}-data-sg"
+  name        = "${var.project_name}-${var.environment}-db-sg"
   description = "Security group for Data Processing EC2"
   vpc_id      = aws_vpc.main_vpc.id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-data-sg"
+    Name = "${var.project_name}-${var.environment}-db-sg"
   }
 }
 
