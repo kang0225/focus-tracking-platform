@@ -139,7 +139,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
     sid    = "AllowTerraformInfraManagement"
     effect = "Allow"
 
-    actions = [
+    actions = [ #여기바꿔야 될듯?
       "ec2:*",
       "elasticloadbalancing:*",
       "autoscaling:*",
