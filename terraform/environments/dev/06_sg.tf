@@ -25,7 +25,7 @@ resource "aws_security_group" "web_sg" {
 }
 
 # 3. Data EC2 
-resource "aws_security_group" "data_sg" {
+resource "aws_security_group" "db_sg" {
   name        = "${var.project_name}-${var.environment}-data-sg"
   description = "Security group for Data Processing EC2"
   vpc_id      = aws_vpc.main_vpc.id
@@ -82,7 +82,7 @@ resource "aws_security_group_rule" "web_egress_to_data" {
   from_port                = 8000
   to_port                  = 8000
   protocol                 = "tcp"
-  source_security_group_id = aws_security_group.data_sg.id
+  source_security_group_id = aws_security_group.db_sg.id
   security_group_id        = aws_security_group.web_sg.id
 }
 
@@ -102,7 +102,7 @@ resource "aws_security_group_rule" "data_ingress_from_web" {
   to_port                  = 8000
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
-  security_group_id        = aws_security_group.data_sg.id
+  security_group_id        = aws_security_group.db_sg.id
 }
 
 resource "aws_security_group_rule" "data_egress_all" {
@@ -111,7 +111,7 @@ resource "aws_security_group_rule" "data_egress_all" {
   to_port           = 0
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.data_sg.id
+  security_group_id = aws_security_group.db_sg.id
 }
 
 resource "aws_security_group_rule" "data_egress_to_web" {
@@ -120,5 +120,5 @@ resource "aws_security_group_rule" "data_egress_to_web" {
   to_port                  = 8000
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id 
-  security_group_id        = aws_security_group.data_sg.id 
+  security_group_id        = aws_security_group.db_sg.id 
 }
