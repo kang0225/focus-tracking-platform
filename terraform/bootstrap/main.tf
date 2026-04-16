@@ -153,7 +153,8 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "iam:*",
       "rds:*",
       "secretsmanager:*",
-      "kms:*"
+      "kms:*",
+      "ssm:*"
     ]
 
     resources = ["*"]
