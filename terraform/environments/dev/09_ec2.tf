@@ -32,7 +32,7 @@ data "aws_ssm_parameter" "ecs_ami_arm" {
 
 # 1. 앱 서버 (Web EC2)
 resource "aws_instance" "app_ec2" {
-   ami                   = data.aws_ssm_parameter.ecs_ami_arm.value
+  ami                   = data.aws_ssm_parameter.ecs_ami_arm.value
   instance_type          = "t4g.medium"
   subnet_id              = aws_subnet.private_app_a.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
@@ -55,7 +55,7 @@ resource "aws_instance" "app_ec2" {
     #!/bin/bash
     echo "ECS_CLUSTER=${aws_ecs_cluster.main.name}" >> /etc/ecs/ecs.config
   EOT
-  
+
   tags = {
     Name        = "app-ec2"
     Environment = var.environment
