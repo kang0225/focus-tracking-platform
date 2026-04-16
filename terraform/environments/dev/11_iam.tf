@@ -119,5 +119,5 @@ resource "aws_iam_role" "codedeploy_role" {
 # AWS가 제공하는 ECS 블루-그린 배포 전용 정책 연결
 resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
   role       = aws_iam_role.codedeploy_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForECS"
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
