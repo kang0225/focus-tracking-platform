@@ -63,8 +63,8 @@ resource "aws_security_group_rule" "alb_ingress_https" {
 # 32768 ~ 65535는 ECS가 자동으로 배정하는 포트 범위
 resource "aws_security_group_rule" "alb_egress_to_web" {
   type                     = "egress"
-  from_port                = 32768   # ★ 변경: 3000 → 32768
-  to_port                  = 65535   # ★ 변경: 3000 → 65535
+  from_port                = 3000
+  to_port                  = 3000
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.alb_sg.id
@@ -75,8 +75,8 @@ resource "aws_security_group_rule" "alb_egress_to_web" {
 # "ALB에서 오는 것만" 허용이라 외부에서 직접 못 들어옴 (안전)
 resource "aws_security_group_rule" "web_ingress_from_alb" {
   type                     = "ingress"
-  from_port                = 32768   # ★ 변경: 3000 → 32768
-  to_port                  = 65535   # ★ 변경: 3000 → 65535
+  from_port                = 3000
+  to_port                  = 3000
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb_sg.id
   security_group_id        = aws_security_group.web_sg.id
