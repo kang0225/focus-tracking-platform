@@ -12,17 +12,54 @@ export function useConcentrationData() {
   useEffect(() => {
     const loadScripts = async () => {
       try {
-        const loadScript = (src: string) => new Promise((resolve) => {
+        const win = window as any;
+        if (win.cv && win.Heartbeat && win.webgazer) {
+          setScriptsLoaded(true);
+          return;
+        }
+
+        const loadScript = (src: string, isReady: () => boolean) => new Promise((resolve, reject) => {
+          if (isReady()) {
+            resolve(true);
+            return;
+          }
+
+          const existing = document.querySelector(`script[src="${src}"]`);
+          if (existing) {
+            let settled = false;
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              window.clearInterval(interval);
+              resolve(true);
+            };
+            const fail = () => {
+              if (settled) return;
+              settled = true;
+              window.clearInterval(interval);
+              reject(new Error(`${src} 로드에 실패했습니다.`));
+            };
+            const interval = window.setInterval(() => {
+              if (isReady()) {
+                finish();
+              }
+            }, 100);
+            existing.addEventListener('load', finish, { once: true });
+            existing.addEventListener('error', fail, { once: true });
+            return;
+          }
+
           const script = document.createElement('script');
           script.src = src;
           script.async = true;
           script.onload = resolve;
+          script.onerror = reject;
           document.body.appendChild(script);
         });
 
-        await loadScript('https://docs.opencv.org/4.5.0/opencv.js');
-        await loadScript('/webgazer.js');
-        await loadScript('/heartbeat.js');
+        await loadScript('/opencv.js', () => !!win.cv);
+        await loadScript('/webgazer.js', () => !!win.webgazer);
+        await loadScript('/heartbeat.js', () => !!win.Heartbeat);
         setScriptsLoaded(true);
       } catch (err) {
         console.error("Script loading failed:", err);
@@ -53,12 +90,17 @@ export function useConcentrationData() {
   // 4. 데이터 가공
   const heartRate = phoneBpm > 0 ? phoneBpm : webcamBpm;
   const heartRateSource = phoneBpm > 0 ? 'Apple Watch' : 'Camera';
+  const hasGaze = coordinates.x > 0 && coordinates.y > 0;
+  const hasHeartRate = heartRate >= 40 && heartRate <= 180;
+  const heartRateStability = hasHeartRate ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35) : 0;
+  const focusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
 
   return {
     coordinates,
     isLoaded,
     heartRate,
     heartRateSource,
+    focusScore,
     scriptsLoaded
   };
 }
