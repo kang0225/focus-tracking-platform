@@ -9,3 +9,28 @@ output "ecr_repository_arn" {
   value       = aws_ecr_repository.app.arn
   description = "이 ECR 레포지토리의 ARN"
 }
+
+output "site_url" {
+  description = "사이트 접속 URL"
+  value       = "https://${var.domain_name}"
+}
+
+output "alb_dns_name" {
+  description = "ALB DNS (디버깅용)"
+  value       = aws_lb.app.dns_name
+}
+
+output "route53_zone_id" {
+  description = "Hosted Zone ID"
+  value       = local.zone_id
+}
+
+output "route53_nameservers" {
+  description = "외부 등록기관에 입력할 NS 레코드 (외부 도메인일 때만)"
+  value       = var.create_route53_zone ? aws_route53_zone.main[0].name_servers : []
+}
+
+output "acm_certificate_arn" {
+  description = "발급된 ACM 인증서 ARN"
+  value       = aws_acm_certificate_validation.main.certificate_arn
+}
