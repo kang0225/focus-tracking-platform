@@ -1,7 +1,10 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { StudySessionRecord } from '@/types/dashboard';
+
+const STORAGE_KEY = 'focusTracker.sessions';
 
 function ResultContent() {
   const router = useRouter();
@@ -18,6 +21,33 @@ function ResultContent() {
   const unfocusRatio = 100 - focusRatio;
   const bpmStatus = avgBpm < 60 ? '낮음' : avgBpm > 100 ? '높음' : '정상';
   const bpmStatusColor = avgBpm < 60 ? 'text-blue-400' : avgBpm > 100 ? 'text-red-400' : 'text-emerald-400';
+  const sessionId = `${time}-${focusRatio}-${avgBpm}`;
+
+  useEffect(() => {
+    if (time <= 0 && focusRatio <= 0 && avgBpm <= 0) return;
+
+    const record: StudySessionRecord = {
+      id: sessionId,
+      createdAt: Date.now(),
+      durationSeconds: time,
+      focusRatio,
+      avgBpm,
+    };
+
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    let sessions: StudySessionRecord[] = [];
+    try {
+      sessions = stored ? JSON.parse(stored) : [];
+    } catch {
+      sessions = [];
+    }
+    const nextSessions = [
+      record,
+      ...sessions.filter((session) => session.id !== record.id),
+    ].slice(0, 30);
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSessions));
+  }, [avgBpm, focusRatio, sessionId, time]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
@@ -201,6 +231,12 @@ function ResultContent() {
 
         {/* 버튼 */}
         <div className="mt-8 flex gap-4 justify-end">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="rounded-lg border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-800"
+          >
+            대시보드 보기
+          </button>
           <button
             onClick={() => router.push('/')}
             className="rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-3 font-semibold shadow-lg shadow-blue-500/20 transition hover:shadow-lg hover:shadow-blue-400/40"

@@ -1,3 +1,6 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Terraform
 **/.terraform/*
 *.tfstate
 *.tfstate.*
@@ -5,13 +8,10 @@ crash.log
 *.tfvars
 *.tfvars.example
 *.tfvars.json
-.DS_Store
 !.terraform.lock.hcl
 
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -21,14 +21,15 @@ crash.log
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
+dist/
 
 # misc
 .DS_Store
@@ -42,6 +43,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!**/.env.example
+
+# lockfiles
+/package-lock.json
 
 # vercel
 .vercel

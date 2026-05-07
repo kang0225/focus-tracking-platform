@@ -31,7 +31,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./terraform/environments/dev
+        working-directory: ./terraform/environments/prod
 
     steps:
       - name: Checkout

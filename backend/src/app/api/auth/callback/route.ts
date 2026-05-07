@@ -1,0 +1,106 @@
+import { NextResponse } from 'next/server';
+import {
+  AuthUser,
+  createSessionToken,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+  STATE_COOKIE,
+} from '@/lib/auth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+interface GoogleUserResponse {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+}
+
+const redirectWithError = (request: Request, error: string) => (
+  NextResponse.redirect(new URL(`/login?error=${error}`, request.url))
+);
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  const storedState = request.headers.get('cookie')
+    ?.split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${STATE_COOKIE}=`))
+    ?.split('=')[1];
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret || !process.env.AUTH_SECRET) {
+    return redirectWithError(request, 'missing_config');
+  }
+
+  if (!code || !state || !storedState || state !== storedState) {
+    return redirectWithError(request, 'invalid_state');
+  }
+
+  try {
+    const redirectUri = new URL('/api/auth/callback', request.url).toString();
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+    if (!tokenRes.ok) return redirectWithError(request, 'token_failed');
+
+    const tokenData: { access_token?: string } = await tokenRes.json();
+    if (!tokenData.access_token) return redirectWithError(request, 'token_failed');
+
+    const userRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    if (!userRes.ok) return redirectWithError(request, 'profile_failed');
+
+    const googleUser: GoogleUserResponse = await userRes.json();
+    const email = googleUser.email_verified === false ? null : googleUser.email ?? null;
+    const displayName = googleUser.name || email || 'Google User';
+
+    const user: AuthUser = {
+      id: googleUser.sub,
+      login: email ?? googleUser.sub,
+      name: displayName,
+      avatarUrl: googleUser.picture ?? '',
+      email,
+    };
+
+    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    response.cookies.delete(STATE_COOKIE);
+    response.cookies.set(
+      SESSION_COOKIE,
+      createSessionToken({
+        user,
+        expiresAt: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
+      }),
+      {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: SESSION_MAX_AGE_SECONDS,
+        path: '/',
+      },
+    );
+
+    return response;
+  } catch {
+    return redirectWithError(request, 'oauth_failed');
+  }
+}
