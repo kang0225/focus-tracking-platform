@@ -20,7 +20,6 @@ resource "aws_codedeploy_deployment_group" "ecs" {
   app_name              = aws_codedeploy_app.ecs.name
   deployment_group_name = "${var.project_name}-${var.environment}-dg"
 
-  # ★ 핵심 수정: codedeploy → codedeploy_role (11_iam.tf에 있는 실제 이름)
   service_role_arn = aws_iam_role.codedeploy_role.arn
 
   deployment_config_name = "CodeDeployDefault.ECSAllAtOnce"
@@ -53,7 +52,7 @@ resource "aws_codedeploy_deployment_group" "ecs" {
   load_balancer_info {
     target_group_pair_info {
       prod_traffic_route {
-        listener_arns = [aws_lb_listener.prod.arn]
+        listener_arns = [aws_lb_listener.prod_https.arn]
       }
       target_group { name = aws_lb_target_group.blue.name }
       target_group { name = aws_lb_target_group.green.name }

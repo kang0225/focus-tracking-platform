@@ -1,21 +1,15 @@
 ##############################################
-#### 1. ALB (Application Load Balancer) ####
+#### 1. ALB                                ####
 ##############################################
-
-# 사용자 트래픽을 받아서 뒤의 컨테이너(Task)로 분배하는 로드밸런서
-# 인터넷 → ALB → Target Group → Task 순으로 요청이 흘러감
 resource "aws_lb" "app" {
   name               = "${var.project_name}-${var.environment}-alb"
-  internal           = false                # false = 인터넷에서 접근 가능
-  load_balancer_type = "application"        # L7 (HTTP/HTTPS 처리)
-
-  # ALB에 붙일 보안그룹 (06_sg.tf의 alb_sg: 80/443 인바운드 허용)
+  internal           = false
+  load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
 
-  # ALB는 반드시 2개 이상 AZ의 퍼블릭 서브넷에 배치
   subnets = [
     aws_subnet.public_a.id,
-    aws_subnet.public_c.id
+    aws_subnet.public_c.id,
   ]
 
   tags = {
@@ -25,51 +19,45 @@ resource "aws_lb" "app" {
 }
 
 ##############################################
-#### 2. ALB 리스너 (Listener)              ####
+#### 2. HTTP(80) → HTTPS(443) 리다이렉트  ####
 ##############################################
-
-# ALB의 "귀" - 어떤 포트로 들어오는 요청을 받을지 정의
-# 80번으로 들어오면 → 기본적으로 Blue 타겟그룹으로 전달
-#
-# 배포 중에는 CodeDeploy가 이 리스너의 target_group을
-# Blue → Green 으로 자동 전환하고,
-# 배포 완료 후엔 Green이 계속 Blue 역할을 하게 됨
-resource "aws_lb_listener" "prod" {
+resource "aws_lb_listener" "http_redirect" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
   protocol          = "HTTP"
 
-  # 기본 동작: 매칭 규칙 없을 때 Blue 타겟그룹으로 포워딩
+  default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+##############################################
+#### 3. HTTPS(443) 리스너                 ####
+##############################################
+resource "aws_lb_listener" "prod_https" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  # 핵심: validation 끝난 cert ARN 참조 (그래야 cert 검증 → listener 순서가 보장됨)
+  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.blue.arn   # 초기값 Blue
+    target_group_arn = aws_lb_target_group.blue.arn
   }
 
-  # ★ 중요: CodeDeploy가 배포 중 이 target_group_arn을 바꿔놓음
-  # Terraform이 다음 apply 때 되돌리면 배포가 깨지므로 변경 무시
+  # CodeDeploy가 배포 중에 default_action을 Blue↔Green으로 바꾸므로 무시
   lifecycle {
     ignore_changes = [default_action]
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-listener-prod"
+    Name = "${var.project_name}-${var.environment}-listener-https"
   }
 }
-
-# 💡 나중에 HTTPS(443) 추가 시:
-# ACM에서 인증서 발급 → 아래 리스너 추가
-#
-# resource "aws_lb_listener" "prod_https" {
-#   load_balancer_arn = aws_lb.app.arn
-#   port              = 443
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-#   certificate_arn   = aws_acm_certificate.main.arn
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.blue.arn
-#   }
-#   lifecycle {
-#     ignore_changes = [default_action]
-#   }
-# }
