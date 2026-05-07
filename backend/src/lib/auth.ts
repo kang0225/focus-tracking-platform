@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 export interface AuthUser {
-  id: number;
+  id: string;
   login: string;
   name: string;
   avatarUrl: string;

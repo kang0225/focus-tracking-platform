@@ -10,18 +10,12 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface GithubUserResponse {
-  id: number;
-  login: string;
-  name: string | null;
-  avatar_url: string;
-  email: string | null;
-}
-
-interface GithubEmailResponse {
-  email: string;
-  primary: boolean;
-  verified: boolean;
+interface GoogleUserResponse {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
 }
 
 const redirectWithError = (request: Request, error: string) => (
@@ -38,8 +32,8 @@ export async function GET(request: Request) {
     .find((cookie) => cookie.startsWith(`${STATE_COOKIE}=`))
     ?.split('=')[1];
 
-  const clientId = process.env.GITHUB_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret || !process.env.AUTH_SECRET) {
     return redirectWithError(request, 'missing_config');
   }
@@ -50,16 +44,16 @@ export async function GET(request: Request) {
 
   try {
     const redirectUri = new URL('/api/auth/callback', request.url).toString();
-    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
         code,
+        grant_type: 'authorization_code',
         redirect_uri: redirectUri,
       }),
     });
@@ -68,33 +62,24 @@ export async function GET(request: Request) {
     const tokenData: { access_token?: string } = await tokenRes.json();
     if (!tokenData.access_token) return redirectWithError(request, 'token_failed');
 
-    const [userRes, emailRes] = await Promise.all([
-      fetch('https://api.github.com/user', {
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          Accept: 'application/vnd.github+json',
-        },
-      }),
-      fetch('https://api.github.com/user/emails', {
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          Accept: 'application/vnd.github+json',
-        },
-      }),
-    ]);
+    const userRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
 
     if (!userRes.ok) return redirectWithError(request, 'profile_failed');
 
-    const githubUser: GithubUserResponse = await userRes.json();
-    const emails: GithubEmailResponse[] = emailRes.ok ? await emailRes.json() : [];
-    const primaryEmail = emails.find((email) => email.primary && email.verified)?.email ?? githubUser.email;
+    const googleUser: GoogleUserResponse = await userRes.json();
+    const email = googleUser.email_verified === false ? null : googleUser.email ?? null;
+    const displayName = googleUser.name || email || 'Google User';
 
     const user: AuthUser = {
-      id: githubUser.id,
-      login: githubUser.login,
-      name: githubUser.name || githubUser.login,
-      avatarUrl: githubUser.avatar_url,
-      email: primaryEmail,
+      id: googleUser.sub,
+      login: email ?? googleUser.sub,
+      name: displayName,
+      avatarUrl: googleUser.picture ?? '',
+      email,
     };
 
     const response = NextResponse.redirect(new URL('/dashboard', request.url));

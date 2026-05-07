@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { StudySessionRecord } from '@/types/dashboard';
 
 interface AuthUser {
-  id: number;
+  id: string;
   login: string;
   name: string;
   avatarUrl: string;
