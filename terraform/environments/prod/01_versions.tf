@@ -10,7 +10,7 @@ terraform {
 
   backend "s3" {
     bucket         = "focus-tracking-platform-terraform-state-bucket"
-    key            = "prod/terraform.tfstate"
+    key            = "dev/terraform.tfstate"
     region         = "ap-northeast-2"
     dynamodb_table = "focus-tracking-platform-terraform-locks"
     encrypt        = true

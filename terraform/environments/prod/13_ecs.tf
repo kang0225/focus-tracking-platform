@@ -138,14 +138,14 @@ resource "aws_ecs_service" "app" {
     container_port   = var.app_port
   }
 
-  # ★ CodeDeploy가 배포 중에 task_definition과 load_balancer를 바꿈
+  # CodeDeploy가 배포 중에 task_definition과 load_balancer를 바꿈
   # Terraform이 되돌리지 않도록 변경 무시 설정
   lifecycle {
     ignore_changes = [task_definition, load_balancer, desired_count]
   }
 
   # ALB 리스너 먼저 생성돼야 서비스 등록 가능
-  depends_on = [aws_lb_listener.prod]
+  depends_on = [aws_lb_listener.prod_https]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-svc"
