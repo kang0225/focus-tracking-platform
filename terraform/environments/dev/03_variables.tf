@@ -75,7 +75,7 @@ variable "domain_name" {
   description = "구매한 도메인 (apex)"
   type        = string
 }
-
+/*
 variable "default_root_object" {
   description = "CloudFront 기본 루트 오브젝트"
   type        = string
@@ -87,3 +87,4 @@ variable "domain_aliases" {
   type        = list(string)
   default     = ["study-room.click", "www.study-room.click"]
 }
+이건 나중에*/
