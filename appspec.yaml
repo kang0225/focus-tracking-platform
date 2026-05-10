@@ -7,4 +7,3 @@ Resources:
         LoadBalancerInfo:
           ContainerName: "app"
           ContainerPort: 3000
-        PlatformVersion: "LATEST"
