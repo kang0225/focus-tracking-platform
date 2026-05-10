@@ -1,19 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useWebGazer } from '../hooks/useWebGazer';
 import { useRPPG } from '../hooks/useRPPG';
+import { useRollingHeartRateAverage } from '../hooks/useRollingHeartRateAverage';
+import { useRollingGazeAverage } from '../hooks/useRollingGazeAverage';
 
 export function useConcentrationData() {
-  const { coordinates, isLoaded, initWebGazer } = useWebGazer();
-  const { bpm: webcamBpm } = useRPPG('webgazerVideoFeed', isLoaded);
+  const { coordinates: rawCoordinates, isLoaded, initWebGazer } = useWebGazer();
+  const coordinates = useRollingGazeAverage(rawCoordinates, isLoaded, 10);
   const [scriptsLoaded, setScriptsLoaded] = useState(false);
   const [phoneBpm, setPhoneBpm] = useState<number>(0);
+  const {
+    bpm: webcamBpm,
+    status: webcamBpmStatus,
+    error: webcamBpmError,
+  } = useRPPG('webgazerVideoFeed', phoneBpm <= 0);
 
   // 1. 외부 스크립트 로드
   useEffect(() => {
     const loadScripts = async () => {
       try {
         const win = window as any;
-        if (win.cv && win.Heartbeat && win.webgazer) {
+        if (win.webgazer) {
           setScriptsLoaded(true);
           return;
         }
@@ -57,12 +64,10 @@ export function useConcentrationData() {
           document.body.appendChild(script);
         });
 
-        await loadScript('/opencv.js', () => !!win.cv);
         await loadScript('/webgazer.js', () => !!win.webgazer);
-        await loadScript('/heartbeat.js', () => !!win.Heartbeat);
         setScriptsLoaded(true);
       } catch (err) {
-        console.error("Script loading failed:", err);
+        console.error('Script loading failed:', err);
       }
     };
     loadScripts();
@@ -81,18 +86,41 @@ export function useConcentrationData() {
         if (res.ok) {
           const data = await res.json();
           setPhoneBpm(data.heartRate);
+        } else {
+          setPhoneBpm(0);
         }
-      } catch (err) { /* ignore */ }
+      } catch (err) {
+        setPhoneBpm(0);
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, []);
 
   // 4. 데이터 가공
-  const heartRate = phoneBpm > 0 ? phoneBpm : webcamBpm;
-  const heartRateSource = phoneBpm > 0 ? 'Apple Watch' : 'Camera';
-  const hasGaze = coordinates.x > 0 && coordinates.y > 0;
-  const hasHeartRate = heartRate >= 40 && heartRate <= 180;
-  const heartRateStability = hasHeartRate ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35) : 0;
+  const rawHeartRate = phoneBpm > 0 ? phoneBpm : webcamBpm;
+  const heartRateSource = phoneBpm > 0 ? 'Apple Watch' : 'FacePhys Camera';
+  const heartRate = useRollingHeartRateAverage(rawHeartRate, rawHeartRate > 0, 10, heartRateSource);
+  const hasGaze = rawCoordinates.x > 0 && rawCoordinates.y > 0;
+  const hasHeartRate = rawHeartRate >= 40 && rawHeartRate <= 180;
+  const isHeartRateMeasuring = phoneBpm <= 0
+    && !webcamBpmError
+    && (webcamBpmStatus.includes('준비')
+      || webcamBpmStatus.includes('수집')
+      || webcamBpmStatus.includes('측정')
+      || webcamBpmStatus.includes('프레임')
+      || webcamBpmStatus.includes('보정')
+      || webcamBpmStatus.includes('움직임')
+      || webcamBpmStatus.includes('유지'));
+  const heartRateStatus = phoneBpm > 0
+    ? '감지됨'
+    : hasHeartRate
+      ? '감지됨'
+      : webcamBpmError
+        ? '오류'
+        : isHeartRateMeasuring
+          ? '측정 중'
+          : '대기 중';
+  const heartRateStability = heartRate >= 40 && heartRate <= 180 ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35) : 0;
   const focusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
 
   return {
@@ -100,7 +128,9 @@ export function useConcentrationData() {
     isLoaded,
     heartRate,
     heartRateSource,
+    heartRateStatus,
+    isHeartRateMeasuring,
     focusScore,
-    scriptsLoaded
+    scriptsLoaded,
   };
 }

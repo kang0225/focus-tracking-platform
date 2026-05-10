@@ -4,11 +4,14 @@ import { useRouter } from 'next/navigation';
 import WebcamView from '../components/WebcamView';
 import GazeDashboard from '../components/GazeDashboard';
 import { StatusCard } from '../components/StatusCard';
+import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
+import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 
 export default function HomePage() {
   const router = useRouter();
-  const { coordinates, isLoaded, heartRate, heartRateSource } = useConcentrationData();
+  const { coordinates, isLoaded, heartRate, heartRateSource, heartRateStatus, isHeartRateMeasuring } = useConcentrationData();
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white p-6">
@@ -33,10 +36,14 @@ export default function HomePage() {
               <WebcamView />
               {isLoaded && <GazeDashboard x={coordinates.x} y={coordinates.y} />}
               
-              {/* Heart Rate Badge */}
-              <div className="absolute top-6 right-6 rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
-                <p className="text-[10px] uppercase text-slate-400">{heartRateSource}</p>
-                <p className="text-3xl font-bold text-red-400">{heartRate}</p>
+              <div className="absolute right-6 top-6 w-52 space-y-2">
+                {/* Heart Rate Badge */}
+                <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
+                  <p className="text-[10px] uppercase text-slate-400">{heartRateSource}</p>
+                  <p className="text-3xl font-bold text-red-400">{heartRate > 0 ? heartRate : '--'}</p>
+                  <p className="text-[10px] text-slate-500">{heartRateStatus}</p>
+                </div>
+                <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
               </div>
               <canvas id="heartbeatCanvas" className="hidden" />
             </div>
@@ -45,7 +52,7 @@ export default function HomePage() {
           {/* 사이드바 */}
           <aside className="space-y-4">
             <StatusCard label="카메라" status="활성" isActive={true} colorClass="emerald" />
-            <StatusCard label={`심박수 (${heartRateSource})`} status={heartRate > 0 ? "감지됨" : "대기 중"} isActive={heartRate > 0} colorClass="red" />
+            <StatusCard label={`심박수 (${heartRateSource})`} status={heartRateStatus} isActive={heartRate > 0 || isHeartRateMeasuring} colorClass="red" />
             <StatusCard label="시선 추적" status={isLoaded ? "로드됨" : "로드 중"} isActive={isLoaded} colorClass="blue" />
             
             <button onClick={() => router.push('/result')} className="w-full rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:shadow-lg hover:shadow-cyan-400/40">

@@ -3,22 +3,47 @@
 import { useEffect, useRef } from 'react';
 
 export default function WebcamView() {
-  // HTMLVideoElement 타입을 명시하여 비디오 태그임을 정의
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    let stream: MediaStream | null = null;
+    let cancelled = false;
+
+    const stopStream = () => {
+      stream?.getTracks().forEach((track) => track.stop());
+      stream = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+
     const getWebcam = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        });
+
+        if (cancelled) {
+          stopStream();
+          return;
         }
+
+        const video = videoRef.current;
+        if (!video) return;
+
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play().catch(() => undefined);
       } catch (err) {
-        console.error("카메라 접근 에러:", err);
+        console.error('카메라 접근 에러:', err);
       }
     };
 
-    getWebcam();
+    void getWebcam();
+
+    return () => {
+      cancelled = true;
+      stopStream();
+    };
   }, []);
 
   return (
@@ -28,6 +53,7 @@ export default function WebcamView() {
         id="webgazerVideoFeed"
         ref={videoRef}
         autoPlay
+        muted
         playsInline
         className="rounded-lg shadow-lg w-full max-w-2xl border-4 border-blue-500"
       />

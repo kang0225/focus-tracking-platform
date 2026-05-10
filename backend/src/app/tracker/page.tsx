@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PairingData, PairingResponse } from '../../types/tracker';
 import WebcamView from '../../components/WebcamView';
+import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useRPPG } from '../../hooks/useRPPG';
+import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
+import { useRollingHeartRateAverage } from '@/hooks/useRollingHeartRateAverage';
 
 export default function TrackerPage() {
   const router = useRouter();
@@ -12,10 +15,15 @@ export default function TrackerPage() {
   const [data, setData] = useState<PairingData | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('페어링 버튼을 눌러 6자리 코드를 생성하세요.');
-  const [isLoaded, setIsLoaded] = useState(false);
+  const isPaired = !!data && data.status === 'active';
+  const useRPPGMode = !isPaired || (isPaired && !data.appleWatchPaired);
 
   // rPPG 훅 사용
-  const { bpm } = useRPPG('webgazerVideoFeed', isLoaded);
+  const { bpm, confidence, status: rppgStatus } = useRPPG('webgazerVideoFeed', useRPPGMode);
+  const rawDisplayedHeartRate = isPaired && data?.appleWatchPaired ? data.heartRate : bpm;
+  const heartRateAverageSource = isPaired && data?.appleWatchPaired ? 'Apple Watch' : 'FacePhys Camera';
+  const displayedHeartRate = useRollingHeartRateAverage(rawDisplayedHeartRate, rawDisplayedHeartRate > 0, 10, heartRateAverageSource);
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || useRPPGMode);
 
   const generateCode = async () => {
     setLoading(true);
@@ -57,29 +65,7 @@ export default function TrackerPage() {
     return () => clearInterval(interval);
   }, [code]);
 
-  // 라이브러리 로드 확인
-  useEffect(() => {
-    const checkLibraries = () => {
-      const win = window as any;
-      if (win.cv && win.Heartbeat && win.webgazer) {
-        console.log("Tracker: 모든 라이브러리 로드됨");
-        setIsLoaded(true);
-      } else {
-        console.log("Tracker: 라이브러리 로드 대기 중...", { cv: !!win.cv, Heartbeat: !!win.Heartbeat, webgazer: !!win.webgazer });
-        setTimeout(checkLibraries, 500);
-      }
-    };
-    // DOM이 로드된 후 체크 시작
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', checkLibraries);
-    } else {
-      checkLibraries();
-    }
-  }, []);
-
   const isWaiting = !!code && (!data || data.status === 'waiting');
-  const isPaired = !!data && data.status === 'active';
-  const useRPPGMode = !isPaired || (isPaired && !data.appleWatchPaired);
 
   return (
     <main className="flex min-h-screen bg-gray-950 text-white px-4 py-10 sm:px-6">
@@ -94,7 +80,7 @@ export default function TrackerPage() {
 
         <div className="mb-10 text-center">
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">FocusTracker Pairing</h1>
-          <p className="mt-3 text-sm text-slate-400 sm:text-base">버튼을 눌러 iPhone 앱과 기본 페어링을 진행하세요. Apple Watch가 페어링되지 않은 경우 웹캠을 통한 rPPG 측정이 자동으로 시작됩니다.</p>
+          <p className="mt-3 text-sm text-slate-400 sm:text-base">버튼을 눌러 iPhone 앱과 기본 페어링을 진행하세요. Apple Watch가 페어링되지 않은 경우 웹캠이 준비되는 즉시 백엔드 FacePhys ONNX 모델로 rPPG 심박 측정이 자동으로 시작됩니다.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
@@ -172,7 +158,7 @@ export default function TrackerPage() {
               {isPaired && data.appleWatchPaired && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
                   <p className="font-semibold text-emerald-200">Apple Watch 연결 완료!</p>
-                  <p className="mt-2 text-3xl font-black text-white">{data.heartRate}</p>
+                  <p className="mt-2 text-3xl font-black text-white">{displayedHeartRate || '--'}</p>
                   <p className="text-slate-400">현재 심박수 (Apple Watch)</p>
                 </div>
               )}
@@ -180,10 +166,13 @@ export default function TrackerPage() {
               {useRPPGMode && (
                 <div className="rounded-3xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
                   <p className="font-semibold text-blue-200">rPPG 모드</p>
-                  <p className="mt-2 text-3xl font-black text-white">{bpm || '--'}</p>
-                  <p className="text-slate-400">현재 심박수 (웹캠)</p>
+                  <p className="mt-2 text-3xl font-black text-white">{displayedHeartRate || '--'}</p>
+                  <p className="text-slate-400">현재 심박수 (FacePhys 웹캠)</p>
+                  <p className="mt-1 text-xs text-slate-500">{rppgStatus}{confidence != null ? ` · 신뢰도 ${Math.round(confidence * 100)}%` : ''}</p>
                 </div>
               )}
+
+              <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
             </div>
           </aside>
         </div>
