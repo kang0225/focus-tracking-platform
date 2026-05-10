@@ -1,6 +1,6 @@
-##############################################
-#### 1. ACM 인증서 발급 요청               ####
-##############################################
+##################################
+### 서울 리전 ACM 인증서 발급 요청 ###
+##################################
 # apex + www 둘 다 커버하는 인증서 한 장
 resource "aws_acm_certificate" "main" {
   domain_name               = var.domain_name
@@ -16,9 +16,9 @@ resource "aws_acm_certificate" "main" {
   }
 }
 
-##############################################
-#### 2. 검증용 CNAME 자동 생성             ####
-##############################################
+############################
+### 검증용 CNAME 자동 생성 ###
+############################
 # ACM이 시킨 검증 CNAME을 Route53에 자동으로 박음
 # apex용 1개 + www용 1개, 총 2개 생성됨
 resource "aws_route53_record" "cert_validation" {
@@ -38,11 +38,16 @@ resource "aws_route53_record" "cert_validation" {
   allow_overwrite = true
 }
 
-##############################################
-#### 3. 검증 완료 대기                     ####
-##############################################
+######################
+#### 검증 완료 대기 ####
+######################
 # 위 CNAME이 propagate되어 ACM이 검증 완료할 때까지 기다림
 resource "aws_acm_certificate_validation" "main" {
   certificate_arn         = aws_acm_certificate.main.arn
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
+
+
+##########################################
+### 미국 버지니아 리전 ACM 인증서 발급 요청 ###
+##########################################
