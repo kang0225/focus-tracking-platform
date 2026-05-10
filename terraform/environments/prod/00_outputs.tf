@@ -22,12 +22,7 @@ output "alb_dns_name" {
 
 output "route53_zone_id" {
   description = "Hosted Zone ID"
-  value       = local.zone_id
-}
-
-output "route53_nameservers" {
-  description = "외부 등록기관에 입력할 NS 레코드 (외부 도메인일 때만)"
-  value       = var.create_route53_zone ? aws_route53_zone.main[0].name_servers : []
+  value       = data.aws_route53_zone.main.zone_id
 }
 
 output "acm_certificate_arn" {

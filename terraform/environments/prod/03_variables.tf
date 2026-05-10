@@ -65,3 +65,9 @@ variable "instance_name" {
   type        = string
   default     = "test-ec2"
 }
+
+variable "domain_name" {
+  description = "Root domain name for the service"
+  type        = string
+}
+
