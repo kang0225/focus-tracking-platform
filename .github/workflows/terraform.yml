@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'terraform/environments/dev/**'
+      - 'terraform/environments/prod/**'
 
 permissions:
   id-token: write
@@ -13,7 +13,7 @@ permissions:
 env:
   TF_VAR_aws_region: ap-northeast-2
   TF_VAR_project_name: focus-tracking-platform
-  TF_VAR_environment: dev
+  TF_VAR_environment: prod
   TF_VAR_stack_name: main
   TF_VAR_vpc_cidr: 10.0.0.0/16
   TF_VAR_az_a: ap-northeast-2a
