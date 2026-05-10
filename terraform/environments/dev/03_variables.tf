@@ -2,6 +2,11 @@ variable "aws_region" {
   type = string
 }
 
+variable "aws_region_cloudfront" {
+  type = string
+  default = "us-east-1"
+}
+
 variable "project_name" {
   type = string
 }
@@ -69,4 +74,16 @@ variable "instance_name" {
 variable "domain_name" {
   description = "구매한 도메인 (apex)"
   type        = string
+}
+
+variable "default_root_object" {
+  description = "CloudFront 기본 루트 오브젝트"
+  type        = string
+  default     = "index.html"
+}
+
+variable "domain_aliases" {
+  description = "커스텀 도메인 목록"
+  type        = "String"
+  default     = ["study-room.click", "www.study-room.click"]
 }
