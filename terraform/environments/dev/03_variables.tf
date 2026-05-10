@@ -67,7 +67,6 @@ variable "instance_name" {
 }
 
 variable "domain_name" {
-  description = "Root domain name for the service"
+  description = "구매한 도메인 (apex)"
   type        = string
 }
-
