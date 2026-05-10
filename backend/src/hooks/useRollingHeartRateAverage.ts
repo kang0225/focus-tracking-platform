@@ -11,33 +11,42 @@ function isValidHeartRate(value: number) {
 
 export function useRollingHeartRateAverage(heartRate: number, enabled = true, windowSeconds = 10, resetKey = '') {
   const [samples, setSamples] = useState<HeartRateSample[]>([]);
-  const lastAddedRef = useRef(0);
+  const latestHeartRateRef = useRef(heartRate);
+
+  useEffect(() => {
+    latestHeartRateRef.current = heartRate;
+  }, [heartRate]);
 
   useEffect(() => {
     setSamples([]);
-    lastAddedRef.current = 0;
   }, [resetKey]);
 
   useEffect(() => {
     if (!enabled) {
       setSamples([]);
-      lastAddedRef.current = 0;
-      return;
+      return undefined;
     }
 
-    const value = Number(heartRate);
-    if (!isValidHeartRate(value)) return;
+    const sample = () => {
+      const value = Number(latestHeartRateRef.current);
+      const now = Date.now();
+      const cutoff = now - windowSeconds * 1000;
 
-    const now = Date.now();
-    if (now - lastAddedRef.current < 900) return;
+      setSamples((current) => {
+        const recentSamples = current.filter((sample) => sample.timeMs >= cutoff);
+        if (!isValidHeartRate(value)) return recentSamples;
 
-    lastAddedRef.current = now;
-    const cutoff = now - windowSeconds * 1000;
-    setSamples((current) => [
-      ...current.filter((sample) => sample.timeMs >= cutoff),
-      { value, timeMs: now },
-    ]);
-  }, [enabled, heartRate, windowSeconds]);
+        return [
+          ...recentSamples,
+          { value, timeMs: now },
+        ];
+      });
+    };
+
+    sample();
+    const interval = window.setInterval(sample, 1000);
+    return () => window.clearInterval(interval);
+  }, [enabled, windowSeconds, resetKey]);
 
   return useMemo(() => {
     if (samples.length === 0) return 0;

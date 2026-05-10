@@ -29,6 +29,7 @@ interface RppgSession {
   fps: number;
   frameIndex: number;
   lastFrameTimeMs: number | null;
+  signalTimeMs: number;
   previousFrame: Float32Array | null;
   motionCooldownFrames: number;
   lastMotionScore: number | null;
@@ -174,6 +175,7 @@ async function createSession(id: string | undefined, fps: number): Promise<RppgS
     fps,
     frameIndex: 0,
     lastFrameTimeMs: null,
+    signalTimeMs: 0,
     previousFrame: null,
     motionCooldownFrames: 0,
     lastMotionScore: null,
@@ -295,7 +297,8 @@ export async function runRppgFrame(request: RppgFrameRequest): Promise<RppgFrame
   const result = await model.runFrame(frame, session.state, { dt });
   session.state = result.state;
 
-  const bpm = session.estimator.add(result.value, timestampMs, sampleQuality);
+  session.signalTimeMs += dt * 1000;
+  const bpm = session.estimator.add(result.value, session.signalTimeMs, sampleQuality);
   const stats = estimatorStats(session.estimator);
   const frameIndex = session.frameIndex;
   session.frameIndex += 1;

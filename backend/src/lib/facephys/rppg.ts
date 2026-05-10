@@ -186,7 +186,7 @@ function correctLikelyHarmonic(spectrum: SpectralBin[], peak: SpectralBin, stepH
 
   const fundamental = refinePeak(spectrum, fundamentalIndex, stepHz);
   const relativePower = fundamental.power / Math.max(peak.power, EPSILON);
-  const threshold = peakBpm >= 135 ? 0.22 : 0.34;
+  const threshold = peakBpm >= 135 ? 0.45 : 0.55;
 
   return relativePower >= threshold ? fundamental : peak;
 }
@@ -214,8 +214,8 @@ function correctLikelyHighAlias(spectrum: SpectralBin[], peak: SpectralBin, step
     const relativePower = candidate.power / Math.max(peak.power, EPSILON);
     const signalOverNoise = candidate.power / Math.max(noiseFloor, EPSILON);
     const enoughPower = peakBpm >= 112
-      ? relativePower >= 0.14 && signalOverNoise >= 1.7
-      : relativePower >= 0.22 && signalOverNoise >= 2.2;
+      ? relativePower >= 0.32 && signalOverNoise >= 2.4
+      : relativePower >= 0.4 && signalOverNoise >= 2.8;
     if (!enoughPower) continue;
 
     const score = candidate.power * peakSelectionPrior(candidateBpm);
@@ -236,34 +236,34 @@ function peakSelectionPrior(bpm: number, preferredBpm?: number) {
       : 0.12 + ((bpm - 52) / 10) * 0.88;
   const restingPrior = bpm <= 105
     ? lowPrior
-    : bpm >= 135
-      ? 0.18
-      : 1 - ((bpm - 105) / 30) * 0.82;
+    : bpm >= 150
+      ? 0.52
+      : 1 - ((bpm - 105) / 45) * 0.48;
 
   if (!Number.isFinite(preferredBpm) || Number(preferredBpm) <= 0) {
-    const initialHighPenalty = bpm <= 100
+    const initialHighPenalty = bpm <= 110
       ? 1
-      : bpm >= 122
-        ? 0.26
-        : 1 - ((bpm - 100) / 22) * 0.74;
+      : bpm >= 155
+        ? 0.65
+        : 1 - ((bpm - 110) / 45) * 0.35;
     return restingPrior * initialHighPenalty;
   }
 
   const baseline = Number(preferredBpm);
   const diff = Math.abs(bpm - baseline);
-  const continuityPrior = Math.max(0.22, Math.exp(-diff / 42));
+  const continuityPrior = Math.max(0.38, Math.exp(-diff / 48));
   const upwardJump = bpm - baseline;
   const upwardPrior = upwardJump <= 14
     ? 1
     : upwardJump >= 42
-      ? 0.25
-      : 1 - ((upwardJump - 14) / 28) * 0.75;
+      ? 0.55
+      : 1 - ((upwardJump - 14) / 28) * 0.45;
   const downwardJump = baseline - bpm;
   const downwardPrior = downwardJump <= 12
     ? 1
     : downwardJump >= 28
-      ? 0.28
-      : 1 - ((downwardJump - 12) / 16) * 0.72;
+      ? 0.38
+      : 1 - ((downwardJump - 12) / 16) * 0.62;
 
   return restingPrior * continuityPrior * upwardPrior * downwardPrior;
 }

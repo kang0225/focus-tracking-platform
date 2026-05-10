@@ -116,6 +116,8 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
     let stopped = false;
     let timer: number | null = null;
     let requestInFlight = false;
+    const frameIntervalMs = Math.max(1, 1000 / Math.max(fps, 1));
+    let nextCaptureAt = 0;
 
     const cleanupSession = () => {
       const sessionId = sessionIdRef.current;
@@ -131,7 +133,9 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
 
     const scheduleNext = () => {
       if (stopped || abortController.signal.aborted) return;
-      timer = window.setTimeout(captureAndSend, Math.max(0, 1000 / fps));
+      const now = window.performance.now();
+      if (nextCaptureAt <= 0 || nextCaptureAt < now) nextCaptureAt = now;
+      timer = window.setTimeout(captureAndSend, Math.max(0, nextCaptureAt - now));
     };
 
     const captureAndSend = async () => {
@@ -139,6 +143,10 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
         scheduleNext();
         return;
       }
+
+      const captureStartedAt = window.performance.now();
+      if (nextCaptureAt <= 0 || nextCaptureAt < captureStartedAt) nextCaptureAt = captureStartedAt;
+      nextCaptureAt += frameIntervalMs;
 
       requestInFlight = true;
       try {
