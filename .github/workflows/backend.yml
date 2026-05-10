@@ -54,7 +54,7 @@ jobs:
           set -e
           IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY
           docker buildx build \
-            --platform linux/amd64, linux/arm64 \
+            --platform linux/amd64,linux/arm64 \
             -t $IMAGE:$IMAGE_TAG \
             -t $IMAGE:latest \
             --push \
