@@ -29,7 +29,7 @@ output "acm_certificate_arn" {
   description = "발급된 ACM 인증서 ARN"
   value       = aws_acm_certificate_validation.main.certificate_arn
 }
-
+/*
 output "cloudfront_distribution_id" {
   description = "CloudFront Distribution ID"
   value       = aws_cloudfront_distribution.this.id
@@ -49,3 +49,4 @@ output "cloudfront_hosted_zone_id" {
   description = "CloudFront Distribution Hosted Zone ID (Route53 Alias용)"
   value       = aws_cloudfront_distribution.this.hosted_zone_id
 }
+이건 나중에 다시*/ 

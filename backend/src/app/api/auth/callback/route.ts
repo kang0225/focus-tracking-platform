@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = new URL('/api/auth/callback', request.url).toString();
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? new URL('/api/auth/callback', request.url).toString();
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
