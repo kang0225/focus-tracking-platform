@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
+import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useVideoRoom } from '@/hooks/useVideoRoom';
 import { FocusMetrics, RoomParticipant } from '@/types/tracker';
 
@@ -12,14 +14,16 @@ interface StreamVideoProps {
   label: string;
   audioEnabled: boolean;
   videoEnabled: boolean;
+  videoId?: string;
 }
 
-function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled }: StreamVideoProps) {
+function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled, videoId }: StreamVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      void videoRef.current.play().catch(() => undefined);
     }
   }, [stream, videoEnabled]);
 
@@ -27,6 +31,7 @@ function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled 
     <div className="relative aspect-video overflow-hidden rounded-lg border border-slate-700 bg-slate-950">
       {stream && videoEnabled ? (
         <video
+          id={videoId}
           ref={videoRef}
           autoPlay
           playsInline
@@ -95,7 +100,8 @@ export default function VideoRoomPage() {
   const [name, setName] = useState('');
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
-  const { coordinates, isLoaded, heartRate, heartRateSource, focusScore } = useConcentrationData();
+  const { coordinates, isLoaded, heartRate, heartRateSource, heartRateStatus, focusScore } = useConcentrationData();
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
     gazeX: coordinates.x,
     gazeY: coordinates.y,
@@ -188,6 +194,7 @@ export default function VideoRoomPage() {
                 label={me?.name ? `${me.name} (나)` : '나'}
                 audioEnabled={isAudioEnabled}
                 videoEnabled={isVideoEnabled}
+                videoId="webgazerVideoFeed"
               />
               {remoteSlots.map((remote) => (
                 <StreamVideo
@@ -241,10 +248,12 @@ export default function VideoRoomPage() {
                 </div>
                 <div className="rounded-md bg-slate-950 px-2 py-3">
                   <p className="text-xl font-bold text-rose-300">{heartRate || '--'}</p>
-                  <p className="text-[11px] text-slate-500">BPM</p>
+                  <p className="text-[11px] text-slate-500">{heartRate > 0 ? heartRateSource : heartRateStatus}</p>
                 </div>
               </div>
             </div>
+
+            <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
 
             <div className="space-y-3">
               {participants.map((participant) => (
