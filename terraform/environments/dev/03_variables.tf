@@ -84,6 +84,6 @@ variable "default_root_object" {
 
 variable "domain_aliases" {
   description = "커스텀 도메인 목록"
-  type        = "String"
+  type        = list(string)
   default     = ["study-room.click", "www.study-room.click"]
 }
