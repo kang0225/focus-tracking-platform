@@ -84,6 +84,7 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+            APP_BASE_URL=https://study-room.click
 
       - name: ECS 배포 (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
