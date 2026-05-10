@@ -80,6 +80,10 @@ jobs:
           task-definition: taskdef.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build.outputs.image }}
+          environment-variables: |
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
 
       - name: ECS 배포 (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
