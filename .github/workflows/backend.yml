@@ -25,32 +25,30 @@ env:
 
 jobs:
   deploy:
-    name: Build → Push → Deploy
+    name: Build Push Deploy
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: AWS 인증 (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ★ 추가: ARM64 빌드를 위해 QEMU + Buildx 설정
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: ECR 로그인
+      - name: Log in to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ★ 변경: docker build → docker buildx build --platform linux/arm64
-      - name: Docker 빌드 + ECR 푸시 (ARM64)
+      - name: Build and push Docker image (ARM64)
         id: build
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
@@ -66,14 +64,14 @@ jobs:
             ./backend
           echo "image=$IMAGE:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: 현재 Task Definition 다운로드
+      - name: Download current task definition
         run: |
           aws ecs describe-task-definition \
             --task-definition ${{ env.ECS_TASK_FAMILY }} \
             --query taskDefinition \
             > taskdef.json
 
-      - name: 새 Task Definition 렌더링 (이미지만 교체)
+      - name: Render updated task definition
         id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -81,12 +79,14 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build.outputs.image }}
           environment-variables: |
+            NODE_ENV=production
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
             GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}
+            APP_URL=${{ secrets.APP_URL }}
 
-      - name: ECS 배포 (CodeDeploy Blue/Green)
+      - name: Deploy to ECS (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}

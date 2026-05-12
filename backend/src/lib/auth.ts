@@ -40,7 +40,49 @@ const sign = (payload: string) => (
   createHmac('sha256', getAuthSecret()).update(payload).digest('base64url')
 );
 
+const isLocalHostname = (hostname: string) => (
+  hostname === 'localhost' || hostname === '127.0.0.1'
+);
+
 export const makeOauthState = () => randomBytes(24).toString('base64url');
+
+export const getRequestOrigin = (request: Request) => {
+  const appUrl = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (appUrl) {
+    return new URL(appUrl).origin;
+  }
+
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  if (forwardedHost) {
+    return `${forwardedProto ?? 'https'}://${forwardedHost}`;
+  }
+
+  const host = request.headers.get('host')?.trim();
+  if (host) {
+    const hostname = host.split(':')[0];
+    const protocol = isLocalHostname(hostname) ? 'http' : (forwardedProto ?? 'https');
+    return `${protocol}://${host}`;
+  }
+
+  return new URL(request.url).origin;
+};
+
+export const getGoogleRedirectUri = (request: Request) => {
+  const configured = process.env.GOOGLE_REDIRECT_URI?.trim();
+  if (configured) {
+    const requestOrigin = getRequestOrigin(request);
+    const requestHost = new URL(requestOrigin).hostname;
+    const configuredHost = new URL(configured).hostname;
+
+    // Ignore a localhost override when the incoming request is clearly from a deployed host.
+    if (!(isLocalHostname(configuredHost) && !isLocalHostname(requestHost))) {
+      return configured;
+    }
+  }
+
+  return new URL('/api/auth/callback', getRequestOrigin(request)).toString();
+};
 
 export const createSessionToken = (session: AuthSession) => {
   const payload = base64UrlEncode(JSON.stringify(session));
