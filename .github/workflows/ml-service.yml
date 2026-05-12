@@ -53,17 +53,20 @@ jobs:
 
       - name: Deploy to ML EC2 via SSM
         run: |
+          COMPOSE_B64=$(base64 -w 0 ml-service/docker-compose.yml)
+
           aws ssm send-command \
             --instance-ids "${{ vars.ML_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy ML Service with Redis" \
-            --parameters 'commands=[
-              "set -e",
-              "aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.registry }}",
-              "docker pull ${{ steps.build.outputs.image }}",
-              "mkdir -p /opt/ml-service",
-              "cd /opt/ml-service",
-              "ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d",
-              "docker image prune -f"
-            ]' \
+            --parameters "commands=[
+              \"set -e\",
+              \"mkdir -p /opt/ml-service\",
+              \"echo $COMPOSE_B64 | base64 -d > /opt/ml-service/docker-compose.yml\",
+              \"cd /opt/ml-service\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.registry }}\",
+              \"docker pull ${{ steps.build.outputs.image }}\",
+              \"ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d\",
+              \"docker image prune -f\"
+            ]" \
             --region "${{ env.AWS_REGION }}"
