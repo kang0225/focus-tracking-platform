@@ -58,6 +58,7 @@ graph TD
     AWSRES --> KDS
     AWSRES --> KDA
     AWSRES --> S3DATA
+```
 
 ## FacePhys rPPG backend integration
 
