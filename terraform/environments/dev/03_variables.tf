@@ -65,6 +65,11 @@ variable "db_port" {
   default = 3306
 }
 
+variable "ml_port" {
+  type    = number
+  default = 8000
+}
+
 variable "instance_name" {
   description = "EC2 이름"
   type        = string

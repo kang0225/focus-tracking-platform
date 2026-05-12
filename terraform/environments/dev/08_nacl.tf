@@ -49,9 +49,32 @@ resource "aws_network_acl_rule" "public_in_ephemeral" {
 ##########################
 ## Public NACL Outbound ##
 ##########################
-resource "aws_network_acl_rule" "public_out_app_a" {
+
+resource "aws_network_acl_rule" "public_out_http" {
   network_acl_id = aws_network_acl.public.id
   rule_number    = 100
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 80
+  to_port        = 80
+}
+
+resource "aws_network_acl_rule" "public_out_https" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 110
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 443
+  to_port        = 443
+}
+
+resource "aws_network_acl_rule" "public_out_app_a" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 120
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -62,7 +85,7 @@ resource "aws_network_acl_rule" "public_out_app_a" {
 
 resource "aws_network_acl_rule" "public_out_app_c" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 110
+  rule_number    = 130
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -73,7 +96,7 @@ resource "aws_network_acl_rule" "public_out_app_c" {
 
 resource "aws_network_acl_rule" "public_out_ephemeral" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 120
+  rule_number    = 140
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -119,9 +142,31 @@ resource "aws_network_acl_rule" "private_app_in_from_public_c" {
   to_port        = var.app_port
 }
 
-resource "aws_network_acl_rule" "private_app_in_ephemeral" {
+resource "aws_network_acl_rule" "private_app_in_ml_a" {
   network_acl_id = aws_network_acl.private_app.id
   rule_number    = 120
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_a_cidr
+  from_port      = var.ml_port
+  to_port        = var.ml_port
+}
+
+resource "aws_network_acl_rule" "private_app_in_ml_c" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 130
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_c_cidr
+  from_port      = var.ml_port
+  to_port        = var.ml_port
+}
+
+resource "aws_network_acl_rule" "private_app_in_ephemeral" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 140
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
