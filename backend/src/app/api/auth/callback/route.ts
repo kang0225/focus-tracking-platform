@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   AuthUser,
   createSessionToken,
+  getGoogleRedirectUri,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   STATE_COOKIE,
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? new URL('/api/auth/callback', request.url).toString();
+    const redirectUri = getGoogleRedirectUri(request);
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {

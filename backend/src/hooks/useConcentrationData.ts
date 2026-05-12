@@ -5,8 +5,20 @@ import { useRollingHeartRateAverage } from '../hooks/useRollingHeartRateAverage'
 import { useRollingGazeAverage } from '../hooks/useRollingGazeAverage';
 
 export function useConcentrationData() {
-  const { coordinates: rawCoordinates, isLoaded, initWebGazer } = useWebGazer();
-  const coordinates = useRollingGazeAverage(rawCoordinates, isLoaded, 10);
+  const {
+    coordinates: rawCoordinates,
+    isLoaded,
+    isCalibrated,
+    currentCalibrationPointIndex,
+    calibrationPointClickCount,
+    clicksPerCalibrationPoint,
+    totalCalibrationPoints,
+    isCalibrationBusy,
+    initWebGazer,
+    recordCalibrationPoint,
+    resetCalibration,
+  } = useWebGazer();
+  const coordinates = useRollingGazeAverage(rawCoordinates, isLoaded && isCalibrated, 10);
   const [scriptsLoaded, setScriptsLoaded] = useState(false);
   const [phoneBpm, setPhoneBpm] = useState<number>(0);
   const {
@@ -100,7 +112,7 @@ export function useConcentrationData() {
   const rawHeartRate = phoneBpm > 0 ? phoneBpm : webcamBpm;
   const heartRateSource = phoneBpm > 0 ? 'Apple Watch' : 'FacePhys Camera';
   const heartRate = useRollingHeartRateAverage(rawHeartRate, rawHeartRate > 0, 10, heartRateSource);
-  const hasGaze = rawCoordinates.x > 0 && rawCoordinates.y > 0;
+  const hasGaze = isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0;
   const hasHeartRate = rawHeartRate >= 40 && rawHeartRate <= 180;
   const isHeartRateMeasuring = phoneBpm <= 0
     && !webcamBpmError
@@ -125,7 +137,16 @@ export function useConcentrationData() {
 
   return {
     coordinates,
+    rawCoordinates,
     isLoaded,
+    isCalibrated,
+    currentCalibrationPointIndex,
+    calibrationPointClickCount,
+    clicksPerCalibrationPoint,
+    totalCalibrationPoints,
+    isCalibrationBusy,
+    recordCalibrationPoint,
+    resetCalibration,
     heartRate,
     heartRateSource,
     heartRateStatus,

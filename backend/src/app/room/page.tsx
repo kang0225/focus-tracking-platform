@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
+import GazeDot from '@/components/GazeDot';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
@@ -100,7 +102,23 @@ export default function VideoRoomPage() {
   const [name, setName] = useState('');
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
-  const { coordinates, isLoaded, heartRate, heartRateSource, heartRateStatus, focusScore } = useConcentrationData();
+  const {
+    coordinates,
+    rawCoordinates,
+    isLoaded,
+    isCalibrated,
+    currentCalibrationPointIndex,
+    calibrationPointClickCount,
+    clicksPerCalibrationPoint,
+    totalCalibrationPoints,
+    isCalibrationBusy,
+    recordCalibrationPoint,
+    resetCalibration,
+    heartRate,
+    heartRateSource,
+    heartRateStatus,
+    focusScore,
+  } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
     gazeX: coordinates.x,
@@ -223,8 +241,18 @@ export default function VideoRoomPage() {
                     {room?.roomId ?? '매칭 중'} · {participants.length}/{room?.maxParticipants ?? 5}명
                   </p>
                 </div>
-                <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-300 ring-1 ring-slate-800">
-                  {isLoaded ? '시선 추적 활성' : '시선 추적 로딩 중'}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-300 ring-1 ring-slate-800">
+                    {!isLoaded ? '시선 추적 로딩 중' : isCalibrated ? '시선 보정 완료' : '시선 보정 필요'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void resetCalibration()}
+                    disabled={!isLoaded || isCalibrationBusy}
+                    className="h-10 rounded-md border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    다시 보정
+                  </button>
                 </div>
               </div>
             </div>
@@ -268,6 +296,21 @@ export default function VideoRoomPage() {
         </section>
       </div>
       <canvas id="heartbeatCanvas" className="hidden" />
+      <GazeDot
+        x={rawCoordinates.x}
+        y={rawCoordinates.y}
+        visible={isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
+      />
+      <GazeCalibrationOverlay
+        active={isLoaded && !isCalibrated}
+        currentPointIndex={currentCalibrationPointIndex}
+        pointClickCount={calibrationPointClickCount}
+        clicksPerPoint={clicksPerCalibrationPoint}
+        totalPoints={totalCalibrationPoints}
+        isBusy={isCalibrationBusy}
+        onPointClick={(point) => recordCalibrationPoint(point.xPercent, point.yPercent)}
+        onReset={() => void resetCalibration()}
+      />
     </main>
   );
 }
