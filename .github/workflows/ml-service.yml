@@ -55,7 +55,7 @@ jobs:
         run: |
           COMPOSE_B64=$(base64 -w 0 ml-service/docker-compose.yml)
 
-          COMMAND_ID=$(aws ssm send-command \
+          aws ssm send-command \
             --instance-ids "${{ vars.ML_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy ML Service with Redis" \
@@ -69,20 +69,4 @@ jobs:
               \"ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d\",
               \"docker image prune -f\"
             ]" \
-            --region "${{ env.AWS_REGION }}" \
-            --query "Command.CommandId" \
-            --output text)
-
-          echo "SSM Command ID: $COMMAND_ID"
-
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ vars.ML_EC2_INSTANCE_ID }}" \
-            --region "${{ env.AWS_REGION }}" || true
-
-          aws ssm get-command-invocation \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ vars.ML_EC2_INSTANCE_ID }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
-            --output json
+            --region "${{ env.AWS_REGION }}"
