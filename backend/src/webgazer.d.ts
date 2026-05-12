@@ -5,6 +5,10 @@ declare module 'webgazer' {
     setGazeListener(callback: (data: { x: number; y: number } | null, elapsedTime: number) => void): WebGazer;
     showVideoPreview(show: boolean): WebGazer;
     showPredictionPoints(show: boolean): WebGazer;
+    saveDataAcrossSessions(save: boolean): WebGazer;
+    applyKalmanFilter(apply: boolean): WebGazer;
+    recordScreenPosition(x: number, y: number, eventType?: 'click' | 'move'): WebGazer;
+    clearData(): Promise<void> | void;
     pause(): WebGazer;
     resume(): WebGazer;
     end(): WebGazer;
