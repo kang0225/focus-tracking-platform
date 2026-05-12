@@ -29,6 +29,15 @@ output "acm_certificate_arn" {
   description = "발급된 ACM 인증서 ARN"
   value       = aws_acm_certificate_validation.main.certificate_arn
 }
+
+output "s3_endpoint_id" {
+  value = aws_vpc_endpoint.s3.id
+}
+
+output "dynamodb_endpoint_id" {
+  value = aws_vpc_endpoint.dynamodb.id
+}
+
 /*
 output "cloudfront_distribution_id" {
   description = "CloudFront Distribution ID"
