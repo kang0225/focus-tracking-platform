@@ -113,6 +113,10 @@ resource "aws_instance" "ml_ec2" {
     volume_type = "gp3"
   }
 
+  # ML 전용 프로파일 연결
+  iam_instance_profile = aws_iam_instance_profile.ml_ec2_profile.name
+  associate_public_ip_address = false
+
   tags = {
     Name = "ml-ec2"
   }

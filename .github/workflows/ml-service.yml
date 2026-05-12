@@ -63,7 +63,7 @@ jobs:
               "docker pull ${{ steps.build.outputs.image }}",
               "mkdir -p /opt/ml-service",
               "cd /opt/ml-service",
-              "ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.prod.yml up -d",
+              "ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d",
               "docker image prune -f"
             ]' \
             --region "${{ env.AWS_REGION }}"
