@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import {
   AuthUser,
   createSessionToken,
+  getGoogleRedirectUri,
+  getRequestOrigin,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   STATE_COOKIE,
@@ -19,7 +21,7 @@ interface GoogleUserResponse {
 }
 
 const redirectWithError = (request: Request, error: string) => (
-  NextResponse.redirect(new URL(`/login?error=${error}`, request.url))
+  NextResponse.redirect(new URL(`/login?error=${error}`, getRequestOrigin(request)))
 );
 
 export async function GET(request: Request) {
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? new URL('/api/auth/callback', request.url).toString();
+    const redirectUri = getGoogleRedirectUri(request);
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
       email,
     };
 
-    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    const response = NextResponse.redirect(new URL('/dashboard', getRequestOrigin(request)));
     response.cookies.delete(STATE_COOKIE);
     response.cookies.set(
       SESSION_COOKIE,

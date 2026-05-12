@@ -32,7 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: AWS 인증 (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -41,7 +41,7 @@ jobs:
       # ❌ QEMU 제거 (네이티브 ARM이라 불필요)
       # ❌ Buildx도 제거 가능 (기본 docker build로 충분)
 
-      - name: ECR 로그인
+      - name: Log in to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -61,7 +61,7 @@ jobs:
           docker push $IMAGE:latest
           echo "image=$IMAGE:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: 현재 Task Definition 다운로드
+      - name: Download current task definition
         run: |
           aws ecs describe-task-definition \
             --task-definition ${{ env.ECS_TASK_FAMILY }} \
@@ -76,12 +76,14 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build.outputs.image }}
           environment-variables: |
+            NODE_ENV=production
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
             GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}
+            APP_URL=${{ secrets.APP_URL }}
 
-      - name: ECS 배포 (CodeDeploy Blue/Green)
+      - name: Deploy to ECS (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}

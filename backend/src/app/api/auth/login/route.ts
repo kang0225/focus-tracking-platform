@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { makeOauthState, STATE_COOKIE } from '@/lib/auth';
+import { getGoogleRedirectUri, makeOauthState, STATE_COOKIE } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   }
 
   const state = makeOauthState();
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? new URL('/api/auth/callback', request.url).toString();
+  const redirectUri = getGoogleRedirectUri(request);
   const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authorizeUrl.searchParams.set('client_id', clientId);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
