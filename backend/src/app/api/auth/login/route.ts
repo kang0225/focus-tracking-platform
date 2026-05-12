@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   }
 
   const state = makeOauthState();
-  const redirectUri = new URL('/api/auth/callback', request.url).toString();
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? new URL('/api/auth/callback', request.url).toString();
   const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authorizeUrl.searchParams.set('client_id', clientId);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);

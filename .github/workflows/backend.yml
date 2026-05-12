@@ -6,7 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'appspec.yaml'
-      - '.github/workflows/deploy-backend.yml'
+      - '.github/workflows/backend.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ env:
 jobs:
   deploy:
     name: Build → Push → Deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -84,7 +84,7 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
-            APP_BASE_URL=https://study-room.click
+            GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}
 
       - name: ECS 배포 (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
