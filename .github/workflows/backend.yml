@@ -26,7 +26,7 @@ env:
 jobs:
   deploy:
     name: Build → Push → Deploy
-    runs-on: ubuntu-24.04-arm   # ★ 네이티브 ARM64 러너
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -37,9 +37,6 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      # ❌ QEMU 제거 (네이티브 ARM이라 불필요)
-      # ❌ Buildx도 제거 가능 (기본 docker build로 충분)
 
       - name: Log in to Amazon ECR
         id: ecr
