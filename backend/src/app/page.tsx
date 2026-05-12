@@ -10,38 +10,59 @@ import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 
 export default function HomePage() {
   const router = useRouter();
-  const { coordinates, isLoaded, heartRate, heartRateSource, heartRateStatus, isHeartRateMeasuring } = useConcentrationData();
+  const {
+    coordinates,
+    isLoaded,
+    heartRate,
+    heartRateSource,
+    heartRateStatus,
+    isHeartRateMeasuring,
+    focusRawScore,
+    focusMetrics,
+  } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
+  const focusDisplayScore = focusRawScore != null ? focusRawScore.toFixed(3) : '--';
+  const focusThreshold = focusMetrics?.thresholdRawScore;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white p-6">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white">
       <div className="mx-auto max-w-7xl">
-        {/* 헤더 섹션 */}
-        <header className="mb-8 flex items-center justify-between">
+        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold">집중도 모니터링</h1>
             <p className="text-slate-400">실시간 데이터 트래킹</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => router.push('/dashboard')} className="rounded-lg border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-800">대시보드</button>
-            <button onClick={() => router.push('/room')} className="rounded-lg bg-cyan-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-500 hover:shadow-cyan-400/40">화상 집중방</button>
-            <button onClick={() => router.push('/tracker')} className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-semibold shadow-lg shadow-blue-500/20 transition hover:shadow-lg hover:shadow-blue-400/40">⌚ Apple Watch 연동</button>
+            <button onClick={() => router.push('/dashboard')} className="rounded-lg border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-800">
+              대시보드
+            </button>
+            <button onClick={() => router.push('/room')} className="rounded-lg bg-cyan-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-500 hover:shadow-cyan-400/40">
+              화상 집중방
+            </button>
+            <button onClick={() => router.push('/tracker')} className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-semibold shadow-lg shadow-blue-500/20 transition hover:shadow-lg hover:shadow-blue-400/40">
+              Apple Watch 연동
+            </button>
           </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* 메인 뷰어 */}
           <div className="lg:col-span-2">
             <div className="relative rounded-2xl bg-slate-900/70 p-6 shadow-2xl ring-1 ring-white/5">
               <WebcamView />
               {isLoaded && <GazeDashboard x={coordinates.x} y={coordinates.y} />}
-              
-              <div className="absolute right-6 top-6 w-52 space-y-2">
-                {/* Heart Rate Badge */}
+
+              <div className="absolute right-6 top-6 w-56 space-y-2">
                 <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
                   <p className="text-[10px] uppercase text-slate-400">{heartRateSource}</p>
                   <p className="text-3xl font-bold text-red-400">{heartRate > 0 ? heartRate : '--'}</p>
                   <p className="text-[10px] text-slate-500">{heartRateStatus}</p>
+                </div>
+                <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-emerald-500/30">
+                  <p className="text-[10px] uppercase text-slate-400">rPPG 집중도 원점수</p>
+                  <p className="text-3xl font-bold text-emerald-300">{focusDisplayScore}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {focusThreshold != null ? `threshold ${focusThreshold}` : 'PPI 수집 중'}
+                  </p>
                 </div>
                 <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
               </div>
@@ -49,12 +70,25 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 사이드바 */}
           <aside className="space-y-4">
             <StatusCard label="카메라" status="활성" isActive={true} colorClass="emerald" />
             <StatusCard label={`심박수 (${heartRateSource})`} status={heartRateStatus} isActive={heartRate > 0 || isHeartRateMeasuring} colorClass="red" />
-            <StatusCard label="시선 추적" status={isLoaded ? "로드됨" : "로드 중"} isActive={isLoaded} colorClass="blue" />
-            
+            <StatusCard label="시선 추적" status={isLoaded ? '로드됨' : '로드 중'} isActive={isLoaded} colorClass="blue" />
+
+            <div className="rounded-2xl bg-slate-900/70 p-5 ring-1 ring-emerald-500/20">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-slate-400">집중도 원점수</p>
+                  <p className="mt-1 text-4xl font-bold text-emerald-300">{focusDisplayScore}</p>
+                </div>
+                <div className="text-right text-xs text-slate-500">
+                  <p>PPI {focusMetrics?.ppiMs ?? '--'} ms</p>
+                  <p>rMSSD {focusMetrics?.rmssdPpiMs ?? '--'} ms</p>
+                  <p>HF {focusMetrics?.hfPpiPower ?? '--'}</p>
+                </div>
+              </div>
+            </div>
+
             <button onClick={() => router.push('/result')} className="w-full rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:shadow-lg hover:shadow-cyan-400/40">
               결과 보기
             </button>

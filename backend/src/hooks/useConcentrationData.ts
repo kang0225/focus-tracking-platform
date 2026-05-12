@@ -1,8 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWebGazer } from '../hooks/useWebGazer';
 import { useRPPG } from '../hooks/useRPPG';
 import { useRollingHeartRateAverage } from '../hooks/useRollingHeartRateAverage';
 import { useRollingGazeAverage } from '../hooks/useRollingGazeAverage';
+
+function isMeasuringStatus(status: string) {
+  return [
+    'Preparing',
+    'Collecting',
+    'Calibrating',
+    'Measuring',
+    'Motion detected',
+    '준비',
+    '수집',
+    '측정',
+    '프레임',
+    '보정',
+    '움직임',
+    '유지',
+  ].some((needle) => status.includes(needle));
+}
 
 export function useConcentrationData() {
   const {
@@ -25,13 +42,15 @@ export function useConcentrationData() {
     bpm: webcamBpm,
     status: webcamBpmStatus,
     error: webcamBpmError,
+    focusScore: rppgFocusScore,
+    focusRawScore: rppgFocusRawScore,
+    focusMetrics: rppgFocusMetrics,
   } = useRPPG('webgazerVideoFeed', phoneBpm <= 0);
 
-  // 1. 외부 스크립트 로드
   useEffect(() => {
     const loadScripts = async () => {
       try {
-        const win = window as any;
+        const win = window as Window & { webgazer?: unknown };
         if (win.webgazer) {
           setScriptsLoaded(true);
           return;
@@ -46,22 +65,21 @@ export function useConcentrationData() {
           const existing = document.querySelector(`script[src="${src}"]`);
           if (existing) {
             let settled = false;
+            let interval: number | null = null;
             const finish = () => {
               if (settled) return;
               settled = true;
-              window.clearInterval(interval);
+              if (interval != null) window.clearInterval(interval);
               resolve(true);
             };
             const fail = () => {
               if (settled) return;
               settled = true;
-              window.clearInterval(interval);
-              reject(new Error(`${src} 로드에 실패했습니다.`));
+              if (interval != null) window.clearInterval(interval);
+              reject(new Error(`${src} failed to load.`));
             };
-            const interval = window.setInterval(() => {
-              if (isReady()) {
-                finish();
-              }
+            interval = window.setInterval(() => {
+              if (isReady()) finish();
             }, 100);
             existing.addEventListener('load', finish, { once: true });
             existing.addEventListener('error', fail, { once: true });
@@ -71,8 +89,8 @@ export function useConcentrationData() {
           const script = document.createElement('script');
           script.src = src;
           script.async = true;
-          script.onload = resolve;
-          script.onerror = reject;
+          script.onload = () => resolve(true);
+          script.onerror = () => reject(new Error(`${src} failed to load.`));
           document.body.appendChild(script);
         });
 
@@ -82,47 +100,38 @@ export function useConcentrationData() {
         console.error('Script loading failed:', err);
       }
     };
-    loadScripts();
+
+    void loadScripts();
   }, []);
 
-  // 2. WebGazer 초기화
   useEffect(() => {
     if (scriptsLoaded) initWebGazer();
   }, [scriptsLoaded, initWebGazer]);
 
-  // 3. Apple Watch 데이터 폴링
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const interval = window.setInterval(async () => {
       try {
         const res = await fetch('/api/pair/current');
         if (res.ok) {
-          const data = await res.json();
-          setPhoneBpm(data.heartRate);
+          const data: { heartRate?: number } = await res.json();
+          setPhoneBpm(Number(data.heartRate) || 0);
         } else {
           setPhoneBpm(0);
         }
-      } catch (err) {
+      } catch {
         setPhoneBpm(0);
       }
     }, 2000);
-    return () => clearInterval(interval);
+
+    return () => window.clearInterval(interval);
   }, []);
 
-  // 4. 데이터 가공
   const rawHeartRate = phoneBpm > 0 ? phoneBpm : webcamBpm;
   const heartRateSource = phoneBpm > 0 ? 'Apple Watch' : 'FacePhys Camera';
   const heartRate = useRollingHeartRateAverage(rawHeartRate, rawHeartRate > 0, 10, heartRateSource);
   const hasGaze = isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0;
   const hasHeartRate = rawHeartRate >= 40 && rawHeartRate <= 180;
-  const isHeartRateMeasuring = phoneBpm <= 0
-    && !webcamBpmError
-    && (webcamBpmStatus.includes('준비')
-      || webcamBpmStatus.includes('수집')
-      || webcamBpmStatus.includes('측정')
-      || webcamBpmStatus.includes('프레임')
-      || webcamBpmStatus.includes('보정')
-      || webcamBpmStatus.includes('움직임')
-      || webcamBpmStatus.includes('유지'));
+  const isHeartRateMeasuring = phoneBpm <= 0 && !webcamBpmError && isMeasuringStatus(webcamBpmStatus);
   const heartRateStatus = phoneBpm > 0
     ? '감지됨'
     : hasHeartRate
@@ -132,12 +141,16 @@ export function useConcentrationData() {
         : isHeartRateMeasuring
           ? '측정 중'
           : '대기 중';
-  const heartRateStability = heartRate >= 40 && heartRate <= 180 ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35) : 0;
-  const focusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
+  const heartRateStability = heartRate >= 40 && heartRate <= 180
+    ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35)
+    : 0;
+  const fallbackFocusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
+  const normalizedFocusScore = phoneBpm <= 0 && rppgFocusScore != null ? rppgFocusScore : fallbackFocusScore;
+  const focusScore = phoneBpm <= 0 ? (rppgFocusRawScore ?? 0) : 0;
 
   return {
-    coordinates,
     rawCoordinates,
+    coordinates,
     isLoaded,
     isCalibrated,
     currentCalibrationPointIndex,
@@ -152,6 +165,9 @@ export function useConcentrationData() {
     heartRateStatus,
     isHeartRateMeasuring,
     focusScore,
+    normalizedFocusScore,
+    focusRawScore: phoneBpm <= 0 ? rppgFocusRawScore : null,
+    focusMetrics: phoneBpm <= 0 ? rppgFocusMetrics : null,
     scriptsLoaded,
   };
 }
