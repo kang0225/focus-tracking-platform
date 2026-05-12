@@ -1,16 +1,3 @@
-############################################
-### 라우트 테이블 조회 (private 서브넷 기준) ###
-############################################
-
-data "aws_route_tables" "private" {
-  vpc_id = aws_vpc.main_vpc.id
-
-  filter {
-    name   = "tag:Tier"
-    values = ["private"]
-  }
-}
-
 ###########################
 ### S3 Gateway Endpoint ###
 ###########################
@@ -19,7 +6,7 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main_vpc.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = data.aws_route_tables.private.ids
+  route_table_ids   = [aws_route_table.private_rt.id]
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-s3-gateway-endpoint"
