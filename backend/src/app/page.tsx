@@ -20,11 +20,12 @@ export default function HomePage() {
     heartRateSource,
     heartRateStatus,
     isHeartRateMeasuring,
+    focusRawScore,
+    focusMetrics,
   } = useConcentrationData();
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(
-    heartRate,
-    heartRate > 0 || isHeartRateMeasuring,
-  );
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
+  const focusDisplayScore = focusRawScore != null ? focusRawScore.toFixed(3) : '--';
+  const focusThreshold = focusMetrics?.thresholdRawScore;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white">
@@ -67,6 +68,13 @@ export default function HomePage() {
                   <p className="text-[10px] uppercase text-slate-400">{heartRateSource}</p>
                   <p className="text-3xl font-bold text-red-400">{heartRate > 0 ? heartRate : '--'}</p>
                   <p className="text-[10px] text-slate-500">{heartRateStatus}</p>
+                </div>
+                <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-emerald-500/30">
+                  <p className="text-[10px] uppercase text-slate-400">rPPG 집중도 원점수</p>
+                  <p className="text-3xl font-bold text-emerald-300">{focusDisplayScore}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {focusThreshold != null ? `threshold ${focusThreshold}` : 'PPI 수집 중'}
+                  </p>
                 </div>
                 <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
               </div>

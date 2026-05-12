@@ -2,8 +2,12 @@ const DEFAULT_MIN_BPM = 45;
 const DEFAULT_MAX_BPM = 180;
 const EPSILON = 1e-12;
 const RELIABLE_LOW_BPM = 58;
+const FOCUS_LOW_REFERENCE = Math.log(648.54 / 100) + Math.log(25.45) + Math.log(161.8);
+const FOCUS_HIGH_REFERENCE = Math.log(783.88 / 100) + Math.log(27.97) + Math.log(309.57);
+const FOCUS_REFERENCE_SPAN = FOCUS_HIGH_REFERENCE - FOCUS_LOW_REFERENCE;
+const FOCUS_THRESHOLD_RAW = (FOCUS_LOW_REFERENCE + FOCUS_HIGH_REFERENCE) / 2;
 
-interface TimestampedSample {
+export interface TimestampedSample {
   value: number;
   quality?: number;
   timeMs?: number;
@@ -20,6 +24,16 @@ interface NormalizedSamples {
 interface SpectralBin {
   frequencyHz: number;
   power: number;
+}
+
+interface PulsePeak {
+  timeSeconds: number;
+  value: number;
+}
+
+interface PpiSeries {
+  timesSeconds: number[];
+  intervalsMs: number[];
 }
 
 function isSampleObject(value: unknown): value is TimestampedSample {
@@ -313,6 +327,196 @@ function peakStats(spectrum: SpectralBin[], peakFrequencyHz: number, peakPower: 
   return { peakToAverage, peakToMedian, prominence };
 }
 
+function movingAverage(values: number[], radius: number) {
+  if (values.length === 0 || radius <= 0) return values;
+
+  const smoothed = new Array<number>(values.length);
+  let sum = 0;
+  let left = 0;
+
+  for (let right = 0; right < values.length; right += 1) {
+    sum += values[right];
+
+    while (right - left > radius * 2) {
+      sum -= values[left];
+      left += 1;
+    }
+
+    smoothed[right] = sum / (right - left + 1);
+  }
+
+  return smoothed;
+}
+
+function localPulsePeaks(values: number[], timesSeconds: number[], minPeakDistanceSeconds: number) {
+  const { mean, std } = meanAndStd(values);
+  const threshold = mean + std * 0.05;
+  const candidates: PulsePeak[] = [];
+
+  for (let index = 1; index < values.length - 1; index += 1) {
+    const value = values[index];
+    if (value < threshold) continue;
+    if (value >= values[index - 1] && value > values[index + 1]) {
+      candidates.push({ timeSeconds: timesSeconds[index], value });
+    }
+  }
+
+  const peaks: PulsePeak[] = [];
+  for (const candidate of candidates) {
+    const last = peaks[peaks.length - 1];
+    if (last && candidate.timeSeconds - last.timeSeconds < minPeakDistanceSeconds) {
+      if (candidate.value > last.value) peaks[peaks.length - 1] = candidate;
+      continue;
+    }
+
+    peaks.push(candidate);
+  }
+
+  return peaks;
+}
+
+function buildPpiSeries(peaks: PulsePeak[], minPpiMs: number, maxPpiMs: number): PpiSeries | null {
+  const intervalsMs: number[] = [];
+  const timesSeconds: number[] = [];
+
+  for (let index = 1; index < peaks.length; index += 1) {
+    const intervalMs = (peaks[index].timeSeconds - peaks[index - 1].timeSeconds) * 1000;
+    if (intervalMs < minPpiMs || intervalMs > maxPpiMs) continue;
+
+    intervalsMs.push(intervalMs);
+    timesSeconds.push(peaks[index].timeSeconds);
+  }
+
+  if (intervalsMs.length < 2) return null;
+
+  const center = median(intervalsMs);
+  const filteredIntervals: number[] = [];
+  const filteredTimes: number[] = [];
+
+  for (let index = 0; index < intervalsMs.length; index += 1) {
+    const interval = intervalsMs[index];
+    if (interval < center * 0.65 || interval > center * 1.45) continue;
+    filteredIntervals.push(interval);
+    filteredTimes.push(timesSeconds[index]);
+  }
+
+  return filteredIntervals.length >= 2
+    ? { intervalsMs: filteredIntervals, timesSeconds: filteredTimes }
+    : null;
+}
+
+function ppiSeriesQuality(series: PpiSeries | null) {
+  if (!series || series.intervalsMs.length < 2) return -Infinity;
+  const { mean, std } = meanAndStd(series.intervalsMs);
+  const coefficientOfVariation = std / Math.max(mean, EPSILON);
+  return series.intervalsMs.length - coefficientOfVariation * 6;
+}
+
+function detectPpiSeries(
+  processed: number[],
+  timesSeconds: number[],
+  sampleRate: number,
+  minPpiMs: number,
+  maxPpiMs: number,
+) {
+  const radius = Math.max(1, Math.round(sampleRate * 0.08));
+  const minPeakDistanceSeconds = (minPpiMs / 1000) * 0.72;
+  const candidates = [1, -1].map((polarity) => {
+    const oriented = processed.map((value) => value * polarity);
+    const smoothed = movingAverage(oriented, radius);
+    const peaks = localPulsePeaks(smoothed, timesSeconds, minPeakDistanceSeconds);
+    const series = buildPpiSeries(peaks, minPpiMs, maxPpiMs);
+    return { series, quality: ppiSeriesQuality(series) };
+  });
+
+  return candidates[0].quality >= candidates[1].quality ? candidates[0].series : candidates[1].series;
+}
+
+function detrendSeries(values: number[], timesSeconds: number[]) {
+  const { mean: timeMean } = meanAndStd(timesSeconds);
+  const { mean: valueMean } = meanAndStd(values);
+  let numerator = 0;
+  let denominator = 0;
+
+  for (let index = 0; index < values.length; index += 1) {
+    const centeredTime = timesSeconds[index] - timeMean;
+    numerator += centeredTime * (values[index] - valueMean);
+    denominator += centeredTime * centeredTime;
+  }
+
+  const slope = denominator > EPSILON ? numerator / denominator : 0;
+  return values.map((value, index) => value - (valueMean + slope * (timesSeconds[index] - timeMean)));
+}
+
+function interpolatePpi(series: PpiSeries, sampleRate: number) {
+  const start = series.timesSeconds[0];
+  const end = series.timesSeconds[series.timesSeconds.length - 1];
+  const count = Math.floor((end - start) * sampleRate) + 1;
+  if (count < 4) return null;
+
+  const values: number[] = [];
+  const timesSeconds: number[] = [];
+  let cursor = 0;
+
+  for (let index = 0; index < count; index += 1) {
+    const time = start + index / sampleRate;
+    while (cursor < series.timesSeconds.length - 2 && series.timesSeconds[cursor + 1] < time) {
+      cursor += 1;
+    }
+
+    const leftTime = series.timesSeconds[cursor];
+    const rightTime = series.timesSeconds[Math.min(cursor + 1, series.timesSeconds.length - 1)];
+    const leftValue = series.intervalsMs[cursor];
+    const rightValue = series.intervalsMs[Math.min(cursor + 1, series.intervalsMs.length - 1)];
+    const ratio = rightTime > leftTime ? (time - leftTime) / (rightTime - leftTime) : 0;
+
+    values.push(leftValue + (rightValue - leftValue) * clamp(ratio, 0, 1));
+    timesSeconds.push(time - start);
+  }
+
+  return { values, timesSeconds };
+}
+
+function highFrequencyPpiPower(series: PpiSeries, sampleRate = 2) {
+  const interpolated = interpolatePpi(series, sampleRate);
+  if (!interpolated) return null;
+
+  const values = detrendSeries(interpolated.values, interpolated.timesSeconds);
+  const count = values.length;
+  const frequencyStepHz = sampleRate / count;
+  let windowPower = 0;
+  let bandPower = 0;
+
+  for (let index = 0; index < count; index += 1) {
+    const weight = hann(index, count);
+    windowPower += weight * weight;
+  }
+
+  for (let bin = 1; bin <= Math.floor(count / 2); bin += 1) {
+    const frequencyHz = bin * frequencyStepHz;
+    if (frequencyHz < 0.15 || frequencyHz > 0.4) continue;
+
+    let real = 0;
+    let imag = 0;
+    for (let index = 0; index < count; index += 1) {
+      const weight = hann(index, count);
+      const phase = 2 * Math.PI * frequencyHz * interpolated.timesSeconds[index];
+      real += values[index] * weight * Math.cos(phase);
+      imag -= values[index] * weight * Math.sin(phase);
+    }
+
+    const powerDensity = (2 / Math.max(sampleRate * windowPower, EPSILON)) * (real * real + imag * imag);
+    bandPower += powerDensity * frequencyStepHz;
+  }
+
+  return Math.max(bandPower, EPSILON);
+}
+
+function normalizeFocusScore(rawScore: number) {
+  const normalized = 50 + ((rawScore - FOCUS_THRESHOLD_RAW) / Math.max(FOCUS_REFERENCE_SPAN, EPSILON)) * 50;
+  return Math.round(clamp(normalized, 0, 100));
+}
+
 function confidenceFromSpectrum({
   durationSeconds,
   minDurationSeconds,
@@ -342,6 +546,19 @@ export interface BpmEstimate {
   sampleCount: number;
   durationSeconds: number;
   rawBpm?: number;
+}
+
+export interface RppgFocusEstimate {
+  score: number;
+  rawScore: number;
+  thresholdRawScore: number;
+  isFocused: boolean;
+  ppiMs: number;
+  rmssdPpiMs: number;
+  hfPpiPower: number;
+  peakIntervalCount: number;
+  sampleCount: number;
+  durationSeconds: number;
 }
 
 export function estimateBpm(samples: ArrayLike<number> | TimestampedSample[], {
@@ -426,6 +643,73 @@ export function estimateBpm(samples: ArrayLike<number> | TimestampedSample[], {
     power: refined.power,
     sampleCount,
     durationSeconds,
+  };
+}
+
+export function estimateRppgFocus(samples: TimestampedSample[], {
+  fps = 30,
+  minBpm = DEFAULT_MIN_BPM,
+  maxBpm = DEFAULT_MAX_BPM,
+  minSamples = 120,
+  minDurationSeconds = 15,
+  minIntervals = 8,
+}: {
+  fps?: number;
+  minBpm?: number;
+  maxBpm?: number;
+  minSamples?: number;
+  minDurationSeconds?: number;
+  minIntervals?: number;
+} = {}): RppgFocusEstimate | null {
+  const { values, timesSeconds, durationSeconds } = normalizeSamples(samples, fps);
+  const sampleCount = values.length;
+
+  if (sampleCount < minSamples || durationSeconds < minDurationSeconds) return null;
+  if (minBpm <= 0 || maxBpm <= minBpm) throw new Error('Expected maxBpm to be greater than minBpm.');
+
+  const processed = robustPreprocess(values, timesSeconds);
+  if (!processed) return null;
+
+  const sampleRate = sampleCount > 1 && durationSeconds > 0 ? (sampleCount - 1) / durationSeconds : fps;
+  const ppiSeries = detectPpiSeries(
+    processed,
+    timesSeconds,
+    sampleRate,
+    60000 / maxBpm,
+    60000 / minBpm,
+  );
+
+  if (!ppiSeries || ppiSeries.intervalsMs.length < minIntervals) return null;
+
+  const { mean: ppiMs } = meanAndStd(ppiSeries.intervalsMs);
+  const successiveDifferences = ppiSeries.intervalsMs
+    .slice(1)
+    .map((interval, index) => interval - ppiSeries.intervalsMs[index]);
+  if (successiveDifferences.length === 0) return null;
+
+  const rmssdPpiMs = Math.sqrt(
+    successiveDifferences.reduce((sum, difference) => sum + difference * difference, 0)
+    / successiveDifferences.length,
+  );
+  const hfPpiPower = highFrequencyPpiPower(ppiSeries);
+
+  if (!Number.isFinite(ppiMs) || !Number.isFinite(rmssdPpiMs) || !hfPpiPower || rmssdPpiMs <= 0) {
+    return null;
+  }
+
+  const rawScore = Math.log(ppiMs / 100) + Math.log(rmssdPpiMs) + Math.log(hfPpiPower);
+
+  return {
+    score: normalizeFocusScore(rawScore),
+    rawScore: Number(rawScore.toFixed(3)),
+    thresholdRawScore: Number(FOCUS_THRESHOLD_RAW.toFixed(3)),
+    isFocused: rawScore >= FOCUS_THRESHOLD_RAW,
+    ppiMs: Number(ppiMs.toFixed(1)),
+    rmssdPpiMs: Number(rmssdPpiMs.toFixed(1)),
+    hfPpiPower: Number(hfPpiPower.toFixed(3)),
+    peakIntervalCount: ppiSeries.intervalsMs.length,
+    sampleCount,
+    durationSeconds: Number(durationSeconds.toFixed(2)),
   };
 }
 

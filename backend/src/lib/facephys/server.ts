@@ -2,13 +2,20 @@ import path from 'node:path';
 import { FacePhysOnnx, type FacePhysFrameInput } from './core';
 import { loadStateGzip } from './io';
 import { cloneState, type FacePhysState } from './state';
-import { RollingBpmEstimator, type BpmEstimate } from './rppg';
+import {
+  estimateRppgFocus,
+  RollingBpmEstimator,
+  type BpmEstimate,
+  type RppgFocusEstimate,
+  type TimestampedSample,
+} from './rppg';
 
 const TARGET_SIZE = 36;
 const CHANNELS = 3;
 const FRAME_LENGTH = TARGET_SIZE * TARGET_SIZE * CHANNELS;
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_FPS = 15;
+const FOCUS_WINDOW_SECONDS = 60;
 
 interface OrtRuntime {
   Tensor: new (type: 'float32', data: Float32Array, dims: number[]) => unknown;
@@ -26,6 +33,7 @@ interface RppgSession {
   id: string;
   state: FacePhysState;
   estimator: RollingBpmEstimator;
+  focusSamples: Required<Pick<TimestampedSample, 'value' | 'timeMs'>>[];
   fps: number;
   frameIndex: number;
   lastFrameTimeMs: number | null;
@@ -60,6 +68,7 @@ export interface RppgFrameResult {
   motionArtifact: boolean;
   sampleCount: number;
   durationSeconds: number;
+  focus: RppgFocusEstimate | null;
   inferenceMs: number;
   dt: number;
   ready: boolean;
@@ -172,6 +181,7 @@ async function createSession(id: string | undefined, fps: number): Promise<RppgS
     id: id || makeSessionId(),
     state: cloneState(runtime.initialState),
     estimator: makeEstimator(fps),
+    focusSamples: [],
     fps,
     frameIndex: 0,
     lastFrameTimeMs: null,
@@ -231,6 +241,17 @@ function estimatorStats(estimator: RollingBpmEstimator) {
     sampleCount,
     durationSeconds: Number(durationSeconds.toFixed(2)),
   };
+}
+
+function addFocusSample(session: RppgSession, value: number, timeMs: number, quality: number) {
+  if (quality >= 0.2 && Number.isFinite(value) && Number.isFinite(timeMs)) {
+    session.focusSamples.push({ value, timeMs });
+  }
+
+  const cutoffMs = timeMs - FOCUS_WINDOW_SECONDS * 1000;
+  while (session.focusSamples.length > 0 && session.focusSamples[0].timeMs < cutoffMs) {
+    session.focusSamples.shift();
+  }
 }
 
 function serializeBpm(bpm: BpmEstimate | null, fallbackStats: ReturnType<typeof estimatorStats>) {
@@ -299,6 +320,12 @@ export async function runRppgFrame(request: RppgFrameRequest): Promise<RppgFrame
 
   session.signalTimeMs += dt * 1000;
   const bpm = session.estimator.add(result.value, session.signalTimeMs, sampleQuality);
+  addFocusSample(session, result.value, session.signalTimeMs, sampleQuality);
+  const focus = estimateRppgFocus(session.focusSamples, {
+    fps: session.fps,
+    minSamples: Math.max(90, Math.round(session.fps * 8)),
+    minDurationSeconds: 15,
+  });
   const stats = estimatorStats(session.estimator);
   const frameIndex = session.frameIndex;
   session.frameIndex += 1;
@@ -311,6 +338,7 @@ export async function runRppgFrame(request: RppgFrameRequest): Promise<RppgFrame
     motionScore: motionScore == null ? null : Number(motionScore.toFixed(4)),
     motionQuality: Number(motionQuality.toFixed(3)),
     motionArtifact,
+    focus,
     inferenceMs: Date.now() - startedAt,
     dt,
   };

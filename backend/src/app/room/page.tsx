@@ -77,8 +77,8 @@ function ParticipantMetric({ participant, isMe }: { participant: RoomParticipant
       </div>
       <div className="grid grid-cols-4 gap-3 text-center">
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
-          <p className="text-lg font-bold text-emerald-300">{metrics.focusScore}</p>
-          <p className="text-[11px] uppercase text-slate-500">Focus</p>
+          <p className="text-lg font-bold text-emerald-300">{metrics.focusScore > 0 ? metrics.focusScore.toFixed(3) : '--'}</p>
+          <p className="text-[11px] uppercase text-slate-500">Raw</p>
         </div>
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
           <p className="text-lg font-bold text-cyan-300">{metrics.gazeX}</p>
@@ -263,8 +263,8 @@ export default function VideoRoomPage() {
               <p className="text-sm font-semibold text-white">내 집중도</p>
               <div className="mt-4 grid grid-cols-4 gap-3 text-center">
                 <div className="rounded-md bg-slate-950 px-2 py-3">
-                  <p className="text-xl font-bold text-emerald-300">{focusScore}</p>
-                  <p className="text-[11px] text-slate-500">Focus</p>
+                  <p className="text-xl font-bold text-emerald-300">{focusScore > 0 ? focusScore.toFixed(3) : '--'}</p>
+                  <p className="text-[11px] text-slate-500">Raw</p>
                 </div>
                 <div className="rounded-md bg-slate-950 px-2 py-3">
                   <p className="text-xl font-bold text-cyan-300">{coordinates.x}</p>

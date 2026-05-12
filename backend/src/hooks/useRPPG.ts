@@ -4,6 +4,19 @@ const TARGET_SIZE = 36;
 const CHANNELS = 3;
 const DEFAULT_FPS = 15;
 
+export interface RppgFocusResponse {
+  score: number;
+  rawScore: number;
+  thresholdRawScore: number;
+  isFocused: boolean;
+  ppiMs: number;
+  rmssdPpiMs: number;
+  hfPpiPower: number;
+  peakIntervalCount: number;
+  sampleCount: number;
+  durationSeconds: number;
+}
+
 interface FacePhysRppgResponse {
   sessionId: string;
   frameIndex: number;
@@ -16,6 +29,7 @@ interface FacePhysRppgResponse {
   motionArtifact?: boolean;
   sampleCount: number;
   durationSeconds: number;
+  focus?: RppgFocusResponse | null;
   ready: boolean;
 }
 
@@ -71,7 +85,7 @@ function captureFacePhysFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement
   canvas.height = TARGET_SIZE;
 
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) throw new Error('Canvas 2D context를 생성할 수 없습니다.');
+  if (!context) throw new Error('Canvas 2D context is unavailable.');
 
   context.drawImage(video, roi.x, roi.y, roi.width, roi.height, 0, 0, TARGET_SIZE, TARGET_SIZE);
   const rgba = context.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE).data;
@@ -98,6 +112,9 @@ async function waitForVideo(videoElementId: string, signal: AbortSignal) {
 export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_FPS) {
   const [bpm, setBpm] = useState<number>(0);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [focusScore, setFocusScore] = useState<number | null>(null);
+  const [focusRawScore, setFocusRawScore] = useState<number | null>(null);
+  const [focusMetrics, setFocusMetrics] = useState<RppgFocusResponse | null>(null);
   const [status, setStatus] = useState('심박도 측정 준비 중');
   const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -106,6 +123,9 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
     if (!enabled) {
       setBpm(0);
       setConfidence(null);
+      setFocusScore(null);
+      setFocusRawScore(null);
+      setFocusMetrics(null);
       setError(null);
       setStatus('심박도 측정 비활성화');
       return;
@@ -157,7 +177,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
         }
 
         const { frame } = captureFacePhysFrame(video, canvas);
-        setStatus((current: string) => (current.includes('samples') ? current : '심박도 신호 수집 중'));
+        setStatus((current) => (current.includes('samples') ? current : '심박도 신호 수집 중'));
 
         const response = await fetch('/api/rppg/frame', {
           method: 'POST',
@@ -181,6 +201,11 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
         sessionIdRef.current = payload.sessionId;
         setError(null);
 
+        const focus = payload.focus ?? null;
+        setFocusMetrics(focus);
+        setFocusScore(focus?.score ?? null);
+        setFocusRawScore(focus?.rawScore ?? null);
+
         if (payload.motionArtifact) {
           if (payload.ready && payload.bpm && payload.bpm >= 40 && payload.bpm <= 180) {
             setBpm(payload.bpm);
@@ -198,6 +223,9 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
         if (!abortController.signal.aborted) {
           const message = err instanceof Error ? err.message : 'FacePhys rPPG 측정 중 오류가 발생했습니다.';
           setError(message);
+          setFocusScore(null);
+          setFocusRawScore(null);
+          setFocusMetrics(null);
           setStatus('심박도 측정 오류');
           console.error('FacePhys rPPG 실행 실패:', err);
         }
@@ -229,5 +257,13 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
     };
   }, [videoElementId, enabled, fps]);
 
-  return { bpm, confidence, status, error };
+  return {
+    bpm,
+    confidence,
+    focusScore,
+    focusRawScore,
+    focusMetrics,
+    status,
+    error,
+  };
 }
