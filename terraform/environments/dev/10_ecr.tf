@@ -1,4 +1,7 @@
-# 실제 ECR 레포지토리 생성
+###########################
+### App ECR 레포지토리 생성 ###
+###########################
+
 resource "aws_ecr_repository" "app" {
 
   # 레포지토리 이름
@@ -25,7 +28,7 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
-# ECR 수명 주기 정책
+# App ECR 수명 주기 정책
 # 이미지가 무한정 쌓이면 S3 저장 비용이 청구되므로, 지워줘야함
 resource "aws_ecr_lifecycle_policy" "app_policy" {
   repository = aws_ecr_repository.app.name
@@ -41,6 +44,48 @@ resource "aws_ecr_lifecycle_policy" "app_policy" {
       }
       action = {
         type = "expire" # 삭제
+      }
+    }]
+  })
+}
+
+#############################
+### ML 서비스용 ECR 레포지토리 ###
+#############################
+
+resource "aws_ecr_repository" "ml_service" {
+  name = "${var.project_name}-ml-service-repo"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-ml-service-ecr"
+    Environment = var.environment
+  }
+}
+
+# ML 서비스 ECR 수명 주기 정책
+resource "aws_ecr_lifecycle_policy" "ml_service_policy" {
+  repository = aws_ecr_repository.ml_service.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "최근 업로드된 5개의 이미지만 남기고 나머지는 자동으로 삭제함"
+      selection = {
+        tagStatus     = "any"
+        countType     = "imageCountMoreThan"
+        countNumber   = 5
+      }
+      action = {
+        type = "expire"
       }
     }]
   })
