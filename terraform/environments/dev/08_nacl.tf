@@ -52,7 +52,7 @@ resource "aws_network_acl_rule" "public_in_ephemeral" {
 
 resource "aws_network_acl_rule" "public_out_http" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 100
+  rule_number    = 200
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -63,7 +63,7 @@ resource "aws_network_acl_rule" "public_out_http" {
 
 resource "aws_network_acl_rule" "public_out_https" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 110
+  rule_number    = 210
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -74,7 +74,7 @@ resource "aws_network_acl_rule" "public_out_https" {
 
 resource "aws_network_acl_rule" "public_out_app_a" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 120
+  rule_number    = 100
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -85,7 +85,7 @@ resource "aws_network_acl_rule" "public_out_app_a" {
 
 resource "aws_network_acl_rule" "public_out_app_c" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 130
+  rule_number    = 110
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -96,7 +96,7 @@ resource "aws_network_acl_rule" "public_out_app_c" {
 
 resource "aws_network_acl_rule" "public_out_ephemeral" {
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 140
+  rule_number    = 120
   egress         = true
   protocol       = "tcp"
   rule_action    = "allow"
@@ -144,7 +144,7 @@ resource "aws_network_acl_rule" "private_app_in_from_public_c" {
 
 resource "aws_network_acl_rule" "private_app_in_ml_a" {
   network_acl_id = aws_network_acl.private_app.id
-  rule_number    = 120
+  rule_number    = 200
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
@@ -155,7 +155,7 @@ resource "aws_network_acl_rule" "private_app_in_ml_a" {
 
 resource "aws_network_acl_rule" "private_app_in_ml_c" {
   network_acl_id = aws_network_acl.private_app.id
-  rule_number    = 130
+  rule_number    = 210
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
@@ -166,7 +166,7 @@ resource "aws_network_acl_rule" "private_app_in_ml_c" {
 
 resource "aws_network_acl_rule" "private_app_in_ephemeral" {
   network_acl_id = aws_network_acl.private_app.id
-  rule_number    = 140
+  rule_number    = 120
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
