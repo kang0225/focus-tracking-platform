@@ -114,6 +114,6 @@ resource "aws_instance" "ml_ec2" {
   }
 
   tags = {
-    Name = "Redis-ML-Server"
+    Name = "ml-ec2"
   }
 }
