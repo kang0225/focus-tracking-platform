@@ -97,15 +97,6 @@ resource "aws_security_group_rule" "web_ingress_from_ml" {
   security_group_id        = aws_security_group.web_sg.id
 }
 
-resource "aws_security_group_rule" "web_egress_to_data" {
-  type                     = "egress"
-  from_port                = 8000
-  to_port                  = 8000
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.db_sg.id
-  security_group_id        = aws_security_group.web_sg.id
-}
-
 resource "aws_security_group_rule" "web_egress_all" {
   type              = "egress"
   from_port         = 0
@@ -118,8 +109,8 @@ resource "aws_security_group_rule" "web_egress_all" {
 # 3. Data EC2 Rules
 resource "aws_security_group_rule" "data_ingress_from_web" {
   type                     = "ingress"
-  from_port                = 8000
-  to_port                  = 8000
+  from_port                = 3306
+  to_port                  = 3306
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.db_sg.id
@@ -134,15 +125,6 @@ resource "aws_security_group_rule" "data_egress_all" {
   security_group_id = aws_security_group.db_sg.id
 }
 
-resource "aws_security_group_rule" "data_egress_to_web" {
-  type                     = "egress"
-  from_port                = 8000
-  to_port                  = 8000
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.web_sg.id 
-  security_group_id        = aws_security_group.db_sg.id 
-}
-
 # 4. ML EC2 Rules
 resource "aws_security_group_rule" "ml_ingress_from_web" {
   type                     = "ingress"
@@ -151,6 +133,15 @@ resource "aws_security_group_rule" "ml_ingress_from_web" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.ml_sg.id
+}
+
+resource "aws_security_group_rule" "redis_ingress_from_web" {
+  type                     = "ingress"
+  security_group_id        = aws_security_group.ml_sg.id
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.web_sg.id
 }
 
 resource "aws_security_group_rule" "ml_egress_all" {
