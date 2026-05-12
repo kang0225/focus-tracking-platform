@@ -1,6 +1,6 @@
-##############################
-## Ubuntu 22.04 AMI 조회      ##
-##############################
+############################
+### Ubuntu 22.04 AMI 조회 ###
+############################
 data "aws_ami" "ubuntu_2204_x86" {
   most_recent = true
   owners      = ["099720109477"]
@@ -13,6 +13,21 @@ data "aws_ami" "ubuntu_2204_x86" {
   filter {
     name   = "architecture"
     values = ["x86_64"]
+  }
+}
+
+data "aws_ami" "ubuntu_2204_arm64" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-arm64-server-*"] 
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["arm64"] 
   }
 }
 
@@ -63,7 +78,7 @@ resource "aws_instance" "app_ec2" {
 }
 
 # 2. DB 서버 (DB EC2)
-resource "aws_instance" "free_tier" {
+resource "aws_instance" "db_ec2" {
   ami                    = data.aws_ami.ubuntu_2204_x86.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.private_db_a.id
@@ -83,5 +98,22 @@ resource "aws_instance" "free_tier" {
   tags = {
     Name        = "db-ec2"
     Environment = var.environment
+  }
+}
+
+# 3. ML 서버 (ML EC2)
+resource "aws_instance" "ml_ec2" {
+  ami                    = data.aws_ami.ubuntu_2204_arm64.id
+  instance_type          = "t4g.small"
+  subnet_id              = aws_subnet.private_app_a.id
+  vpc_security_group_ids = [aws_security_group.ml_sg.id]
+
+  root_block_device {
+    volume_size = 30
+    volume_type = "gp3"
+  }
+
+  tags = {
+    Name = "Redis-ML-Server"
   }
 }
