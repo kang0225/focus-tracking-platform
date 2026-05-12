@@ -14,7 +14,7 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: focus-tracking-ml-service-repo
+  ECR_REPOSITORY: focus-tracking-platform-ml-service-repo
   
 jobs:
   deploy:
