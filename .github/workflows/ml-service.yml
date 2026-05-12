@@ -61,8 +61,12 @@ jobs:
             --comment "Deploy ML Service with Redis" \
             --parameters "commands=[
               \"set -e\",
+              \"if ! command -v aws >/dev/null 2>&1; then apt-get update -y && apt-get install -y awscli; fi\",
               \"mkdir -p /opt/ml-service\",
               \"echo $COMPOSE_B64 | base64 -d > /opt/ml-service/docker-compose.yml\",
+              \"echo ENVIRONMENT=dev > /opt/ml-service/.env\",
+              \"echo REDIS_HOST=redis >> /opt/ml-service/.env\",
+              \"echo REDIS_PORT=6379 >> /opt/ml-service/.env\",
               \"cd /opt/ml-service\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.registry }}\",
               \"docker pull ${{ steps.build.outputs.image }}\",
