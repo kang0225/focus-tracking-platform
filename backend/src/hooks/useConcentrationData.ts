@@ -137,6 +137,7 @@ export function useConcentrationData() {
 
   return {
     coordinates,
+    rawCoordinates,
     isLoaded,
     isCalibrated,
     currentCalibrationPointIndex,

@@ -104,6 +104,7 @@ export default function VideoRoomPage() {
   const displayName = name.trim() || defaultNameRef.current;
   const {
     coordinates,
+    rawCoordinates,
     isLoaded,
     isCalibrated,
     currentCalibrationPointIndex,
@@ -296,9 +297,9 @@ export default function VideoRoomPage() {
       </div>
       <canvas id="heartbeatCanvas" className="hidden" />
       <GazeDot
-        x={coordinates.x}
-        y={coordinates.y}
-        visible={isCalibrated && coordinates.x > 0 && coordinates.y > 0}
+        x={rawCoordinates.x}
+        y={rawCoordinates.y}
+        visible={isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
       />
       <GazeCalibrationOverlay
         active={isLoaded && !isCalibrated}
