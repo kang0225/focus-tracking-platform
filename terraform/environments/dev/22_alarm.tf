@@ -10,9 +10,11 @@ resource "aws_sns_topic" "alerts" {
 }
 
 resource "aws_sns_topic_subscription" "email" {
+  for_each = toset(var.alert_emails)
+
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
-  endpoint  = var.alert_email   # 03_variables.tf의 alert_email
+  endpoint  = each.value
 }
 
 ##############################################

@@ -80,7 +80,6 @@ variable "domain_name" {
   description = "구매한 도메인 (apex)"
   type        = string
 }
-
 variable "alert_emails" {
   description = "장애 알림 수신 이메일 목록"
   type        = list(string)
