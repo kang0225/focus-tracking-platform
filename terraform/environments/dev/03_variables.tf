@@ -80,16 +80,8 @@ variable "domain_name" {
   description = "구매한 도메인 (apex)"
   type        = string
 }
-/*
-variable "default_root_object" {
-  description = "CloudFront 기본 루트 오브젝트"
-  type        = string
-  default     = "index.html"
-}
 
-variable "domain_aliases" {
-  description = "커스텀 도메인 목록"
+variable "alert_emails" {
+  description = "장애 알림 수신 이메일 목록"
   type        = list(string)
-  default     = ["study-room.click", "www.study-room.click"]
 }
-이건 나중에*/

@@ -12,6 +12,16 @@ resource "aws_lb" "app" {
     aws_subnet.public_c.id,
   ]
 
+  # ★ 추가: Access Logs를 S3에 직접 저장 (패턴 A)
+  access_logs {
+    bucket  = aws_s3_bucket.logs.bucket
+    prefix  = "alb"
+    enabled = true
+  }
+
+  # S3 버킷 정책이 먼저 만들어져야 ALB 생성 가능
+  depends_on = [aws_s3_bucket_policy.alb_logs]
+
   tags = {
     Name        = "${var.project_name}-${var.environment}-alb"
     Environment = var.environment
