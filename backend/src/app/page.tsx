@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import WebcamView from '../components/WebcamView';
-import GazeDashboard from '../components/GazeDashboard';
+import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '../components/GazeDot';
 import { StatusCard } from '../components/StatusCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
@@ -12,10 +12,16 @@ import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 export default function HomePage() {
   const router = useRouter();
   const {
-    coordinates,
     rawCoordinates,
     isLoaded,
     isCalibrated,
+    currentCalibrationPointIndex,
+    calibrationPointClickCount,
+    clicksPerCalibrationPoint,
+    totalCalibrationPoints,
+    isCalibrationBusy,
+    recordCalibrationPoint,
+    resetCalibration,
     heartRate,
     heartRateSource,
     heartRateStatus,
@@ -61,7 +67,6 @@ export default function HomePage() {
           <div className="lg:col-span-2">
             <div className="relative rounded-2xl bg-slate-900/70 p-6 shadow-2xl ring-1 ring-white/5">
               <WebcamView />
-              {isLoaded && <GazeDashboard x={coordinates.x} y={coordinates.y} />}
 
               <div className="absolute right-6 top-6 w-52 space-y-2">
                 <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
@@ -92,8 +97,8 @@ export default function HomePage() {
             />
             <StatusCard
               label="Gaze Tracking"
-              status={isLoaded ? 'Loaded' : 'Loading'}
-              isActive={isLoaded}
+              status={!isLoaded ? 'Loading' : isCalibrated ? 'Calibrated' : 'Calibration required'}
+              isActive={isLoaded && isCalibrated}
               colorClass="blue"
             />
 
@@ -110,6 +115,16 @@ export default function HomePage() {
         x={rawCoordinates.x}
         y={rawCoordinates.y}
         visible={isLoaded && isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
+      />
+      <GazeCalibrationOverlay
+        active={isLoaded && !isCalibrated}
+        currentPointIndex={currentCalibrationPointIndex}
+        pointClickCount={calibrationPointClickCount}
+        clicksPerPoint={clicksPerCalibrationPoint}
+        totalPoints={totalCalibrationPoints}
+        isBusy={isCalibrationBusy}
+        onPointClick={(point) => recordCalibrationPoint(point.xPercent, point.yPercent)}
+        onReset={() => void resetCalibration()}
       />
     </main>
   );
