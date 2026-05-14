@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
@@ -9,6 +9,8 @@ RUN npm ci
 COPY . .
 
 RUN npm run build
+
+ENV NODE_ENV=production
 
 EXPOSE 3000
 

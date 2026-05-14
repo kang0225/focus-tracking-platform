@@ -196,6 +196,14 @@ export function deleteRppgSession(sessionId: string) {
   return sessions.delete(sessionId);
 }
 
+export async function checkRppgRuntime() {
+  await loadRuntime();
+  return {
+    ok: true,
+    weightsDir: path.join(process.cwd(), 'facephys', 'weights'),
+  };
+}
+
 function validateAndNormalizeFrame(frame: ArrayLike<number>, dims?: number[]): FacePhysFrameInput {
   const shape = Array.isArray(dims) && dims.length === 3 ? dims.map(Number) : [TARGET_SIZE, TARGET_SIZE, CHANNELS];
   if (shape[0] !== TARGET_SIZE || shape[1] !== TARGET_SIZE || shape[2] !== CHANNELS) {
