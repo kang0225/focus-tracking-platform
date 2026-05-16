@@ -35,6 +35,7 @@ const emptyMetrics = (): FocusMetrics => ({
   heartRate: 0,
   heartRateSource: '대기 중',
   focusScore: 0,
+  focusIsFocused: null,
   updatedAt: Date.now(),
 });
 
