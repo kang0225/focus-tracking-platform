@@ -122,6 +122,8 @@ export default function VideoRoomPage() {
     heartRateSource,
     heartRateStatus,
     focusScore,
+    focusIsFocused,
+    focusThresholdRawScore,
   } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
@@ -130,8 +132,9 @@ export default function VideoRoomPage() {
     heartRate,
     heartRateSource,
     focusScore,
+    focusIsFocused,
     updatedAt: Date.now(),
-  }), [coordinates.x, coordinates.y, heartRate, heartRateSource, focusScore]);
+  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, heartRate, heartRateSource]);
 
   const {
     clientId,
@@ -164,6 +167,8 @@ export default function VideoRoomPage() {
       rawGazeY: rawCoordinates.y,
       isGazeCalibrated: isCalibrated,
       focusScore,
+      focusIsFocused,
+      focusThresholdRawScore,
       page: 'room',
     },
   });

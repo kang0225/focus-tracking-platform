@@ -147,6 +147,8 @@ export function useConcentrationData() {
   const fallbackFocusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
   const normalizedFocusScore = phoneBpm <= 0 && rppgFocusScore != null ? rppgFocusScore : fallbackFocusScore;
   const focusScore = phoneBpm <= 0 ? (rppgFocusRawScore ?? 0) : 0;
+  const focusIsFocused = phoneBpm <= 0 ? (rppgFocusMetrics?.isFocused ?? null) : null;
+  const focusThresholdRawScore = phoneBpm <= 0 ? (rppgFocusMetrics?.thresholdRawScore ?? null) : null;
 
   return {
     rawCoordinates,
@@ -165,8 +167,10 @@ export function useConcentrationData() {
     heartRateStatus,
     isHeartRateMeasuring,
     focusScore,
+    focusIsFocused,
     normalizedFocusScore,
     focusRawScore: phoneBpm <= 0 ? rppgFocusRawScore : null,
+    focusThresholdRawScore,
     focusMetrics: phoneBpm <= 0 ? rppgFocusMetrics : null,
     scriptsLoaded,
   };

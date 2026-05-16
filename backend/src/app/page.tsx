@@ -42,11 +42,11 @@ export default function HomePage() {
     heartRateStatus,
     isHeartRateMeasuring,
     focusRawScore,
-    focusMetrics,
+    focusIsFocused,
+    focusThresholdRawScore,
   } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
   const focusDisplayScore = focusRawScore != null ? focusRawScore.toFixed(3) : '--';
-  const focusThreshold = focusMetrics?.thresholdRawScore;
 
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: isLoaded,
@@ -62,6 +62,8 @@ export default function HomePage() {
       rawGazeY: rawCoordinates.y,
       isGazeCalibrated: isCalibrated,
       focusScore: focusRawScore ?? undefined,
+      focusIsFocused,
+      focusThresholdRawScore,
       page: 'solo',
     },
   });
@@ -130,7 +132,7 @@ export default function HomePage() {
                   <p className="text-[10px] uppercase text-slate-400">rPPG 집중도 원점수</p>
                   <p className="text-3xl font-bold text-emerald-300">{focusDisplayScore}</p>
                   <p className="text-[10px] text-slate-500">
-                    {focusThreshold != null ? `threshold ${focusThreshold}` : 'PPI 수집 중'}
+                    {focusRawScore != null ? 'PPI 기반 판정 중' : 'PPI 수집 중'}
                   </p>
                 </div>
                 <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
