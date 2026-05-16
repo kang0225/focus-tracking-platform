@@ -1,77 +1,205 @@
-from typing import List, Dict, Any
+"""Preprocessing utilities for per-second tracking records."""
+
+from __future__ import annotations
+
+import math
+from typing import Any
+
+import numpy as np
 import pandas as pd
-from src.params import REQUIRED_COLUMNS, PROCESSED_COLUMNS
+
+from src.params import (
+    GAZE_MISSING_EXCLUDE_SECONDS,
+    INITIAL_THRESHOLD,
+    MAX_HEART_RATE,
+    MIN_HEART_RATE,
+    WINDOW_SIZE,
+)
 
 
-def preprocess_tracking_data(raw_data: List[Dict[str, Any]]) -> pd.DataFrame:
-    """
-    Redis에서 가져온 tracking JSON 리스트를 전처리한다.
+REQUIRED_COLUMNS = ("timestamp", "gazeX", "gazeY")
+NUMERIC_COLUMNS = ("gazeX", "gazeY", "heartRate", "rPPG", "threshold")
 
-    처리 내용:
-    1. DataFrame 변환
-    2. timestamp datetime 변환
-    3. heartRate, gazeX, gazeY 숫자형 변환
-    4. gazeX/gazeY 결측 여부를 gazeMissing으로 저장
-    5. timestamp, heartRate 결측 행 제거
-    6. timestamp 기준 정렬
-    7. 최종적으로 heartRate, gazeMissing만 반환
 
-    주의:
-    - gazeX/gazeY가 NaN인 것은 시선이 화면 밖으로 나갔거나 추적 실패한 신호일 수 있음.
-    - 따라서 해당 행을 삭제하지 않고 gazeMissing=1로 보존함.
-    - gazeX/gazeY 좌표값 자체는 모델 입력에 쓰지 않으므로 최종 반환에서 제거함.
-    """
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
 
-    if not raw_data:
-        raise ValueError("전처리할 데이터가 비어 있습니다.")
+    return number if math.isfinite(number) else None
 
-    df = pd.DataFrame(raw_data)
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    df["heartRate"] = pd.to_numeric(df["heartRate"], errors="coerce")
-    df["gazeX"] = pd.to_numeric(df["gazeX"], errors="coerce")
-    df["gazeY"] = pd.to_numeric(df["gazeY"], errors="coerce")
+def _numeric_values(series: pd.Series, *, positive_heart_rate: bool = False) -> np.ndarray:
+    values = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float)
+    values = values[np.isfinite(values)]
 
-    # gazeX 또는 gazeY 중 하나라도 없으면 시선 이탈/추적 실패로 간주
-    df["gazeMissing"] = (
-        df["gazeX"].isna() | df["gazeY"].isna()
-    ).astype(int)
+    if positive_heart_rate:
+        values = values[(values >= MIN_HEART_RATE) & (values <= MAX_HEART_RATE)]
 
-    df = df.dropna(subset=["timestamp", "heartRate"])
+    return values
+
+
+def _nested_number(value: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(key)
+    return None
+
+
+def _normalize_record_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Accept the canonical Redis record shape and a few backend-friendly aliases."""
+    normalized = df.copy()
+
+    if "gaze" in normalized.columns:
+        if "gazeX" not in normalized.columns:
+            normalized["gazeX"] = normalized["gaze"].map(lambda value: _nested_number(value, "x"))
+        if "gazeY" not in normalized.columns:
+            normalized["gazeY"] = normalized["gaze"].map(lambda value: _nested_number(value, "y"))
+
+    if "rPPG" not in normalized.columns:
+        for alias in ("rppg", "rppgValue", "rPPGValue"):
+            if alias in normalized.columns:
+                normalized["rPPG"] = normalized[alias]
+                break
+
+    if "threshold" not in normalized.columns:
+        for alias in ("thresholdRawScore", "focusThreshold", "focusThresholdRawScore"):
+            if alias in normalized.columns:
+                normalized["threshold"] = normalized[alias]
+                break
+
+    return normalized
+
+
+def preprocess_tracking_data(raw_records: list[dict[str, Any]]) -> pd.DataFrame:
+    """Convert raw Redis records to a sorted DataFrame with gazeMissing."""
+    if not raw_records:
+        raise ValueError("No records to preprocess.")
+
+    df = _normalize_record_columns(pd.DataFrame(raw_records))
+    missing_columns = [column for column in REQUIRED_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required record fields: {', '.join(missing_columns)}")
+
+    for column in NUMERIC_COLUMNS:
+        if column not in df.columns:
+            df[column] = None
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    df = df.dropna(subset=["timestamp"]).copy()
 
     if df.empty:
-        raise ValueError("timestamp/heartRate 결측 제거 후 남은 데이터가 없습니다.")
+        raise ValueError("No records remain after timestamp validation.")
 
+    df["gazeMissing"] = ((df["gazeX"] == 0) & (df["gazeY"] == 0)).astype(int)
     df = df.sort_values("timestamp").reset_index(drop=True)
-    df = df[PROCESSED_COLUMNS]
 
     return df
 
 
-def split_into_windows(df: pd.DataFrame, window_size: int) -> List[pd.DataFrame]:
-    """
-    전처리된 데이터를 window_size 단위로 나눈다.
-
-    예:
-    3600개 데이터, window_size=60
-    → 60개 window 생성
-    """
-
+def split_into_windows(
+    df: pd.DataFrame,
+    window_size: int = WINDOW_SIZE,
+) -> list[pd.DataFrame]:
+    """Split sorted records into fixed elapsed-time windows."""
     if df.empty:
-        raise ValueError("window로 나눌 데이터가 비어 있습니다.")
+        return []
+    if window_size <= 0:
+        raise ValueError("window_size must be positive.")
 
-    windows = []
+    working = df.sort_values("timestamp").reset_index(drop=True).copy()
+    first_timestamp = working["timestamp"].iloc[0]
+    elapsed_seconds = (
+        working["timestamp"] - first_timestamp
+    ).dt.total_seconds().clip(lower=0)
 
-    for start in range(0, len(df), window_size):
-        window = df.iloc[start:start + window_size]
+    working["_window_index"] = np.floor(elapsed_seconds / window_size).astype(int)
 
-        # 60개가 꽉 찬 window만 사용
-        if len(window) == window_size:
-            windows.append(window)
-
-    if not windows:
-        raise ValueError(
-            f"생성된 window가 없습니다. 데이터 개수가 {window_size}개 미만일 수 있습니다."
-        )
+    windows: list[pd.DataFrame] = []
+    for _, window in working.groupby("_window_index", sort=True):
+        clean_window = window.drop(columns=["_window_index"]).reset_index(drop=True)
+        if not clean_window.empty:
+            windows.append(clean_window)
 
     return windows
+
+
+def calculate_slope(values: np.ndarray) -> float:
+    """Return a simple linear slope for finite values."""
+    finite = values[np.isfinite(values)]
+    if len(finite) < 2:
+        return 0.0
+
+    try:
+        x = np.arange(len(finite), dtype=float)
+        slope = np.polyfit(x, finite, 1)[0]
+    except (ValueError, np.linalg.LinAlgError):
+        return 0.0
+
+    return float(slope) if math.isfinite(float(slope)) else 0.0
+
+
+def _series_stats(values: np.ndarray) -> dict[str, float | None]:
+    if len(values) == 0:
+        return {
+            "mean": None,
+            "std": None,
+            "min": None,
+            "max": None,
+            "slope": 0.0,
+        }
+
+    return {
+        "mean": float(np.mean(values)),
+        "std": float(np.std(values)) if len(values) > 1 else 0.0,
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+        "slope": calculate_slope(values),
+    }
+
+
+def calculate_window_features(
+    window: pd.DataFrame,
+    minute_index: int,
+) -> dict[str, Any]:
+    """Calculate all per-minute features used by inference."""
+    if window.empty:
+        raise ValueError("Cannot calculate features for an empty window.")
+
+    heart_values = _numeric_values(window["heartRate"], positive_heart_rate=True)
+    rppg_values = _numeric_values(window["rPPG"])
+    threshold_values = _numeric_values(window["threshold"])
+
+    heart_stats = _series_stats(heart_values)
+    rppg_stats = _series_stats(rppg_values)
+
+    gaze_missing_seconds = int(window["gazeMissing"].sum())
+    gaze_missing_rate = float(gaze_missing_seconds / len(window))
+    threshold = (
+        float(np.mean(threshold_values))
+        if len(threshold_values) > 0
+        else INITIAL_THRESHOLD
+    )
+
+    return {
+        "minute_index": minute_index,
+        "start_time": window["timestamp"].iloc[0].isoformat(),
+        "end_time": window["timestamp"].iloc[-1].isoformat(),
+        "heartRate_mean": _finite_or_none(heart_stats["mean"]),
+        "heartRate_std": _finite_or_none(heart_stats["std"]),
+        "heartRate_min": _finite_or_none(heart_stats["min"]),
+        "heartRate_max": _finite_or_none(heart_stats["max"]),
+        "heartRate_slope": _finite_or_none(heart_stats["slope"]),
+        "rPPG_mean": _finite_or_none(rppg_stats["mean"]),
+        "rPPG_std": _finite_or_none(rppg_stats["std"]),
+        "rPPG_min": _finite_or_none(rppg_stats["min"]),
+        "rPPG_max": _finite_or_none(rppg_stats["max"]),
+        "rPPG_slope": _finite_or_none(rppg_stats["slope"]),
+        "gaze_missing_seconds": gaze_missing_seconds,
+        "gaze_missing_rate": gaze_missing_rate,
+        "threshold": threshold,
+        "used_for_threshold_update": (
+            gaze_missing_seconds < GAZE_MISSING_EXCLUDE_SECONDS
+        ),
+    }
