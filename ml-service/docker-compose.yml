@@ -1,16 +1,33 @@
 services:
   ml-service:
-    image: ${ML_SERVICE_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: focus-tracking-ml-service:latest
     container_name: ml-service
     restart: unless-stopped
     ports:
       - "8000:8000"
-    env_file:
-      - /opt/ml-service/.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - ml-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -20,7 +37,17 @@ services:
       - "6379:6379"
     networks:
       - ml-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
 
 networks:
   ml-network:
     driver: bridge
+
+volumes:
+  redis_data:

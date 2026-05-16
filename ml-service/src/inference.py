@@ -1,89 +1,198 @@
-# src/inference.py
+"""Session analysis orchestration for the focus tracking ML service."""
 
-from typing import List, Dict, Any
+from __future__ import annotations
 
-import pandas as pd
+import json
+from typing import Any
 
-from src.model import get_focus_model
+import redis.asyncio as redis
+
+from src.model import (
+    calculate_focus_score,
+    classify_focus_state,
+    classify_focus_trend,
+    classify_heart_trend,
+)
+from src.params import REDIS_HOST, REDIS_PORT, session_records_key
+from src.preprocessing import (
+    calculate_window_features,
+    preprocess_tracking_data,
+    split_into_windows,
+)
 
 
-def run_window_inference(windows: List[pd.DataFrame]) -> List[Dict[str, Any]]:
+class SessionDataNotFoundError(ValueError):
+    """Raised when Redis has no records for the requested session."""
+
+
+def create_redis_client() -> redis.Redis:
+    return redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
+
+async def fetch_session_records(
+    user_id: str,
+    session_id: str,
+    redis_client: redis.Redis,
+) -> list[dict[str, Any]]:
     """
-    60개 단위 window 리스트에 대해 예측을 수행한다.
+    Fetch records that the Node.js backend wrote directly to Redis.
+
+    Expected Redis shape:
+        key: study:session:{userId}:{sessionId}:records
+        type: list
+        write command: RPUSH key json_string
     """
+    key = session_records_key(user_id, session_id)
 
-    model = get_focus_model()
+    try:
+        key_type = await redis_client.type(key)
+        if key_type == "none":
+            raise SessionDataNotFoundError(f"No records found for key {key}.")
+        if key_type != "list":
+            raise RuntimeError(
+                f"Expected Redis key {key} to be a list written with RPUSH, "
+                f"but found type {key_type!r}."
+            )
 
-    predictions = []
+        records_json = await redis_client.lrange(key, 0, -1)
+    except redis.RedisError as exc:
+        raise RuntimeError(f"Redis read failed for key {key}: {exc}") from exc
 
-    for index, window in enumerate(windows):
-        prediction = model.predict_window(window)
+    if not records_json:
+        raise SessionDataNotFoundError(f"No records found for key {key}.")
 
-        predictions.append({
-            "windowIndex": index + 1,
-            **prediction,
-        })
+    records: list[dict[str, Any]] = []
+    for index, item in enumerate(records_json):
+        try:
+            parsed = json.loads(item)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid JSON record at index {index}.") from exc
 
-    return predictions
+        if not isinstance(parsed, dict):
+            raise RuntimeError(f"Record at index {index} is not a JSON object.")
+
+        records.append(parsed)
+
+    return records
 
 
-def summarize_predictions(predictions: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    window별 예측 결과를 전체 요약한다.
-    """
+async def delete_session_records(
+    user_id: str,
+    session_id: str,
+    redis_client: redis.Redis,
+) -> int:
+    key = session_records_key(user_id, session_id)
 
-    if not predictions:
-        return {
-            "avgFocusScore": None,
-            "minFocusScore": None,
-            "maxFocusScore": None,
-            "lowFocusWindows": [],
-        }
+    try:
+        return int(await redis_client.delete(key))
+    except redis.RedisError as exc:
+        raise RuntimeError(f"Redis delete failed for key {key}: {exc}") from exc
 
-    focus_scores = [
-        item["focusScore"]
-        for item in predictions
-        if item.get("focusScore") is not None
-    ]
 
-    if not focus_scores:
-        return {
-            "avgFocusScore": None,
-            "minFocusScore": None,
-            "maxFocusScore": None,
-            "lowFocusWindows": [],
-        }
+def _round_float(value: Any, digits: int = 4) -> Any:
+    if isinstance(value, float):
+        return round(value, digits)
+    return value
 
-    avg_focus_score = sum(focus_scores) / len(focus_scores)
-    min_focus_score = min(focus_scores)
-    max_focus_score = max(focus_scores)
 
-    low_focus_windows = [
-        item["windowIndex"]
-        for item in predictions
-        if item.get("focusScore") is not None and item["focusScore"] < 0.6
-    ]
+def _build_summary(minutes: list[dict[str, Any]]) -> dict[str, Any]:
+    total_minutes = len(minutes)
+    avg_gaze_missing_rate = (
+        sum(minute["gaze_missing_rate"] for minute in minutes) / total_minutes
+        if total_minutes > 0
+        else 0.0
+    )
 
     return {
-        "avgFocusScore": float(avg_focus_score),
-        "minFocusScore": float(min_focus_score),
-        "maxFocusScore": float(max_focus_score),
-        "lowFocusWindows": low_focus_windows,
+        "focus_up_minutes": sum(
+            1 for minute in minutes if minute["focus_trend"] == "up"
+        ),
+        "focus_stable_minutes": sum(
+            1 for minute in minutes if minute["focus_trend"] == "stable"
+        ),
+        "focus_down_minutes": sum(
+            1 for minute in minutes if minute["focus_trend"] == "down"
+        ),
+        "high_focus_minutes": sum(
+            1 for minute in minutes if minute["focus_state"] == "high_focus"
+        ),
+        "low_focus_minutes": sum(
+            1 for minute in minutes if minute["focus_state"] == "low_focus"
+        ),
+        "avg_gaze_missing_rate": round(avg_gaze_missing_rate, 4),
     }
 
 
-def run_inference(windows: List[pd.DataFrame]) -> Dict[str, Any]:
+async def analyze_session(
+    user_id: str,
+    session_id: str,
+    delete_after: bool = False,
+    redis_client: redis.Redis | None = None,
+) -> dict[str, Any]:
     """
-    전체 추론 파이프라인.
+    Analyze one session.
 
-    1. window별 예측
-    2. 전체 요약 생성
+    Threshold values are expected to be sent by Node.js with each record and
+    stored in Redis. This service consumes the per-window average threshold and
+    does not update low/high threshold means internally.
     """
+    owns_client = redis_client is None
+    client = redis_client or create_redis_client()
 
-    predictions = run_window_inference(windows)
-    summary = summarize_predictions(predictions)
+    try:
+        raw_records = await fetch_session_records(user_id, session_id, client)
+        dataframe = preprocess_tracking_data(raw_records)
+        windows = split_into_windows(dataframe)
 
-    return {
-        "summary": summary,
-        "predictions": predictions,
-    }
+        if not windows:
+            raise ValueError("No analysis windows could be created.")
+
+        minutes: list[dict[str, Any]] = []
+        previous_focus_score: float | None = None
+        previous_heart_rate_mean: float | None = None
+
+        for minute_index, window in enumerate(windows, start=1):
+            features = calculate_window_features(window, minute_index)
+
+            focus_score = calculate_focus_score(
+                features["heartRate_mean"],
+                window["rPPG"].to_numpy(dtype=float),
+            )
+            threshold = features["threshold"]
+            focus_state = classify_focus_state(focus_score, threshold)
+            focus_trend = classify_focus_trend(
+                focus_score,
+                previous_focus_score,
+            )
+            heart_trend = classify_heart_trend(
+                features["heartRate_mean"],
+                previous_heart_rate_mean,
+            )
+
+            minute = {
+                **features,
+                "focus_score": focus_score,
+                "focus_state": focus_state,
+                "focus_trend": focus_trend,
+                "heart_trend": heart_trend,
+            }
+            minutes.append(
+                {key: _round_float(value) for key, value in minute.items()}
+            )
+
+            previous_focus_score = focus_score
+            previous_heart_rate_mean = features["heartRate_mean"]
+
+        if delete_after:
+            await delete_session_records(user_id, session_id, client)
+
+        return {
+            "userId": user_id,
+            "sessionId": session_id,
+            "duration_minutes": len(minutes),
+            "summary": _build_summary(minutes),
+            "minutes": minutes,
+        }
+    finally:
+        if owns_client:
+            await client.aclose()
