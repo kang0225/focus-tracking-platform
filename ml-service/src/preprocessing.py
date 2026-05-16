@@ -1,10 +1,6 @@
-# src/preprocessing.py
-
 from typing import List, Dict, Any
-
 import pandas as pd
-
-from src.params import REQUIRED_COLUMNS, MODEL_INPUT_COLUMNS
+from src.params import REQUIRED_COLUMNS, PROCESSED_COLUMNS
 
 
 def preprocess_tracking_data(raw_data: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -13,12 +9,17 @@ def preprocess_tracking_data(raw_data: List[Dict[str, Any]]) -> pd.DataFrame:
 
     처리 내용:
     1. DataFrame 변환
-    2. 필수 컬럼 확인
-    3. timestamp datetime 변환
-    4. heartRate, gazeX, gazeY 숫자형 변환
-    5. 결측값 포함 행 제거
+    2. timestamp datetime 변환
+    3. heartRate, gazeX, gazeY 숫자형 변환
+    4. gazeX/gazeY 결측 여부를 gazeMissing으로 저장
+    5. timestamp, heartRate 결측 행 제거
     6. timestamp 기준 정렬
-    7. 모델 입력 컬럼 3개만 반환
+    7. 최종적으로 heartRate, gazeMissing만 반환
+
+    주의:
+    - gazeX/gazeY가 NaN인 것은 시선이 화면 밖으로 나갔거나 추적 실패한 신호일 수 있음.
+    - 따라서 해당 행을 삭제하지 않고 gazeMissing=1로 보존함.
+    - gazeX/gazeY 좌표값 자체는 모델 입력에 쓰지 않으므로 최종 반환에서 제거함.
     """
 
     if not raw_data:
@@ -26,28 +27,23 @@ def preprocess_tracking_data(raw_data: List[Dict[str, Any]]) -> pd.DataFrame:
 
     df = pd.DataFrame(raw_data)
 
-    missing_columns = [
-        col for col in REQUIRED_COLUMNS
-        if col not in df.columns
-    ]
-
-    if missing_columns:
-        raise ValueError(f"필수 컬럼이 없습니다: {missing_columns}")
-
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-
     df["heartRate"] = pd.to_numeric(df["heartRate"], errors="coerce")
     df["gazeX"] = pd.to_numeric(df["gazeX"], errors="coerce")
     df["gazeY"] = pd.to_numeric(df["gazeY"], errors="coerce")
 
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    # gazeX 또는 gazeY 중 하나라도 없으면 시선 이탈/추적 실패로 간주
+    df["gazeMissing"] = (
+        df["gazeX"].isna() | df["gazeY"].isna()
+    ).astype(int)
+
+    df = df.dropna(subset=["timestamp", "heartRate"])
 
     if df.empty:
-        raise ValueError("결측값 제거 후 남은 데이터가 없습니다.")
+        raise ValueError("timestamp/heartRate 결측 제거 후 남은 데이터가 없습니다.")
 
     df = df.sort_values("timestamp").reset_index(drop=True)
-
-    df = df[MODEL_INPUT_COLUMNS]
+    df = df[PROCESSED_COLUMNS]
 
     return df
 
