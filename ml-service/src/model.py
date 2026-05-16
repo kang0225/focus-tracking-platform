@@ -1,171 +1,175 @@
-from typing import Optional, Dict, Any
+"""Focus score, threshold helper, and state classification functions."""
 
-import joblib
+from __future__ import annotations
+
+import math
+from typing import Iterable, Optional
+
 import numpy as np
-import pandas as pd
 
 from src.params import (
-    MODEL_PATH,
-    HEART_RATE_LABEL_DOWN,
-    HEART_RATE_LABEL_STABLE,
-    HEART_RATE_LABEL_UP,
+    EMA_ALPHA,
+    EPSILON,
+    FOCUS_TREND_DELTA,
+    HEART_TREND_DELTA,
+    INITIAL_THRESHOLD,
+    MIN_GAP,
+    THRESHOLD_RATIO,
 )
 
-class HeartRateModel:
+
+def finite_values(values: Iterable[float] | np.ndarray | None) -> np.ndarray:
+    """Return finite numeric values as a one-dimensional numpy array."""
+    if values is None:
+        return np.array([], dtype=float)
+
+    try:
+        array = np.asarray(values, dtype=float).reshape(-1)
+    except (TypeError, ValueError):
+        return np.array([], dtype=float)
+
+    return array[np.isfinite(array)]
+
+
+def calculate_rri(heart_rate: Optional[float]) -> Optional[float]:
+    """Estimate RR interval in milliseconds from heart rate."""
+    if heart_rate is None:
+        return None
+
+    try:
+        value = float(heart_rate)
+    except (TypeError, ValueError):
+        return None
+
+    if not math.isfinite(value) or value <= 0:
+        return None
+
+    return 60_000.0 / value
+
+
+def calculate_rmssd(rppg_values: Iterable[float] | np.ndarray | None) -> float:
+    """Approximate rMSSD from consecutive rPPG differences."""
+    values = finite_values(rppg_values)
+    if len(values) < 2:
+        return EPSILON
+
+    differences = np.diff(values)
+    rmssd = float(np.sqrt(np.mean(differences * differences)))
+    return max(rmssd, EPSILON)
+
+
+def calculate_hf(rppg_values: Iterable[float] | np.ndarray | None) -> float:
+    """Approximate HF power using rPPG variance."""
+    values = finite_values(rppg_values)
+    if len(values) < 2:
+        return EPSILON
+
+    hf_power = float(np.var(values))
+    return max(hf_power, EPSILON)
+
+
+def calculate_focus_score(
+    heart_rate: Optional[float],
+    rppg_values: Iterable[float] | np.ndarray | None,
+) -> Optional[float]:
     """
-    심박수 상태를 예측하는 모델 wrapper.
+    Calculate focus score.
 
-    입력:
-    - 1분 window의 heartRate 데이터
-
-    출력 라벨:
-    - 심박수 저하됨
-    - 심박수 일관됨
-    - 심박수 높아짐
+    Formula:
+        Focus Score = RRI / 100 + ln(rMSSD) + ln(HF)
     """
+    rri = calculate_rri(heart_rate)
+    values = finite_values(rppg_values)
 
-    def __init__(self):
-        self.model = None
+    if rri is None or len(values) < 2:
+        return None
 
-    def _load_model(self, model_path: str):
-        try:
-            return joblib.load(model_path)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_path}")
-        except Exception as e:
-            raise RuntimeError(f"모델 로드 중 오류 발생: {str(e)}")
-
-    def extract_heart_rate_features(
-        self,
-        window: pd.DataFrame,
-        session_hr_mean: float,
-        session_hr_std: float,
-    ) -> Dict[str, float]:
-        """
-        1분 window에서 심박수 관련 feature를 추출한다.
-
-        개인마다 심박수 baseline이 다르기 때문에,
-        session_hr_mean, session_hr_std를 이용해서
-        현재 window가 세션 평균 대비 얼마나 다른지 계산한다.
-        """
-
-        hr = window["heartRate"]
-
-        hr_mean = float(hr.mean())
-
-        hr_std_raw = hr.std()
-        hr_std = float(hr_std_raw) if not np.isnan(hr_std_raw) else 0.0
-
-        hr_min = float(hr.min())
-        hr_max = float(hr.max())
-        hr_range = float(hr_max - hr_min)
-
-        hr_start = float(hr.iloc[0])
-        hr_end = float(hr.iloc[-1])
-        hr_diff = float(hr_end - hr_start)
-
-        # 단순 기울기
-        hr_slope = float(hr_diff / len(hr))
-
-        if session_hr_std == 0 or np.isnan(session_hr_std):
-            hr_zscore = 0.0
-        else:
-            hr_zscore = float((hr_mean - session_hr_mean) / session_hr_std)
-
-        return {
-            "hrMean": hr_mean,
-            "hrStd": hr_std,
-            "hrMin": hr_min,
-            "hrMax": hr_max,
-            "hrRange": hr_range,
-            "hrStart": hr_start,
-            "hrEnd": hr_end,
-            "hrDiff": hr_diff,
-            "hrSlope": hr_slope,
-            "hrZScore": hr_zscore,
-            "hrDeltaFromSessionMean": float(hr_mean - session_hr_mean),
-        }
-
-    def _features_to_array(self, features: Dict[str, float]) -> np.ndarray:
-        """
-        실제 ML 모델에 넣기 위한 feature 배열 생성.
-
-        중요:
-        학습할 때도 이 feature 순서와 동일해야 한다.
-        """
-
-        return np.array([[
-            features["hrMean"],
-            features["hrStd"],
-            features["hrMin"],
-            features["hrMax"],
-            features["hrRange"],
-            features["hrDiff"],
-            features["hrSlope"],
-            features["hrZScore"],
-            features["hrDeltaFromSessionMean"],
-        ]])
-
-    def _dummy_predict(self, features: Dict[str, float]) -> str:
-        """
-        실제 모델 파일이 없을 때 사용하는 임시 규칙 기반 예측.
-
-        나중에 heart_rate_model.pkl이 준비되면
-        USE_DUMMY_MODEL=false로 바꾸고 실제 모델 예측을 사용하면 된다.
-        """
-
-        hr_z = features["hrZScore"]
-        hr_diff = features["hrDiff"]
-
-        if hr_z <= HR_Z_DOWN_THRESHOLD and hr_diff < 0:
-            return HEART_RATE_LABEL_DOWN
-
-        if hr_z >= HR_Z_UP_THRESHOLD and hr_diff > 0:
-            return HEART_RATE_LABEL_UP
-
-        return HEART_RATE_LABEL_STABLE
-
-    def predict_window(
-        self,
-        window: pd.DataFrame,
-        session_hr_mean: float,
-        session_hr_std: float,
-    ) -> Dict[str, Any]:
-        """
-        하나의 1분 window에 대해 심박수 상태를 예측한다.
-        """
-
-        features = self.extract_heart_rate_features(
-            window=window,
-            session_hr_mean=session_hr_mean,
-            session_hr_std=session_hr_std,
+    try:
+        rmssd = calculate_rmssd(values)
+        hf_power = calculate_hf(values)
+        score = (rri / 100.0) + math.log(max(rmssd, EPSILON)) + math.log(
+            max(hf_power, EPSILON)
         )
+    except (OverflowError, ValueError):
+        return None
 
-        if self.use_dummy:
-            label = self._dummy_predict(features)
-        else:
-            x = self._features_to_array(features)
-            prediction = self.model.predict(x)
-            label = str(prediction[0])
+    if not math.isfinite(score):
+        return None
 
-        return {
-            "heartRateLabel": label,
-            "heartRateFeatures": features,
-        }
+    return float(score)
 
 
-heart_rate_model: Optional[HeartRateModel] = None
-
-
-def get_heart_rate_model() -> HeartRateModel:
+def update_ema(
+    old_mean: float,
+    current_focus_score: float,
+    alpha: float = EMA_ALPHA,
+) -> float:
     """
-    모델은 요청마다 로드하지 않고,
-    서버 프로세스에서 한 번만 생성해서 재사용한다.
+    Return an EMA-updated mean.
+
+    Node.js owns threshold updates in the current architecture. This helper is
+    kept here so the analysis engine can adopt service-side calibration later
+    without changing the public API.
     """
+    return float(alpha * current_focus_score + (1.0 - alpha) * old_mean)
 
-    global heart_rate_model
 
-    if heart_rate_model is None:
-        heart_rate_model = HeartRateModel()
+def calculate_threshold(
+    low_focus_mean: float,
+    high_focus_mean: float,
+    ratio: float = THRESHOLD_RATIO,
+    min_gap: float = MIN_GAP,
+) -> float:
+    """
+    Calculate dynamic threshold from low/high focus means.
 
-    return heart_rate_model
+    This is a helper for future ML-service-owned threshold calibration. The
+    current inference path consumes the threshold sent by Node.js instead.
+    """
+    gap = high_focus_mean - low_focus_mean
+    if gap < min_gap:
+        return INITIAL_THRESHOLD
+
+    return float(low_focus_mean + ratio * gap)
+
+
+def classify_focus_state(
+    focus_score: Optional[float],
+    threshold: Optional[float],
+) -> str:
+    if focus_score is None or threshold is None:
+        return "unknown"
+
+    return "high_focus" if focus_score >= threshold else "low_focus"
+
+
+def classify_focus_trend(
+    current_focus_score: Optional[float],
+    previous_focus_score: Optional[float],
+    delta: float = FOCUS_TREND_DELTA,
+) -> str:
+    if current_focus_score is None or previous_focus_score is None:
+        return "stable"
+
+    diff = current_focus_score - previous_focus_score
+    if diff > delta:
+        return "up"
+    if diff < -delta:
+        return "down"
+    return "stable"
+
+
+def classify_heart_trend(
+    current_hr_mean: Optional[float],
+    previous_hr_mean: Optional[float],
+    delta: float = HEART_TREND_DELTA,
+) -> str:
+    if current_hr_mean is None or previous_hr_mean is None:
+        return "stable"
+
+    diff = current_hr_mean - previous_hr_mean
+    if diff > delta:
+        return "up"
+    if diff < -delta:
+        return "down"
+    return "stable"
