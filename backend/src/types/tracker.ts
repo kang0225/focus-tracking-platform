@@ -17,6 +17,7 @@ export interface FocusMetrics {
   heartRate: number;
   heartRateSource: string;
   focusScore: number;
+  focusIsFocused?: boolean | null;
   updatedAt: number;
 }
 

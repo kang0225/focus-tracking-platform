@@ -3,10 +3,12 @@ import { FacePhysOnnx, type FacePhysFrameInput } from './core';
 import { loadStateGzip } from './io';
 import { cloneState, type FacePhysState } from './state';
 import {
+  createInitialRppgFocusThresholdState,
   estimateRppgFocus,
   RollingBpmEstimator,
   type BpmEstimate,
   type RppgFocusEstimate,
+  type RppgFocusThresholdState,
   type TimestampedSample,
 } from './rppg';
 
@@ -34,6 +36,7 @@ interface RppgSession {
   state: FacePhysState;
   estimator: RollingBpmEstimator;
   focusSamples: Required<Pick<TimestampedSample, 'value' | 'timeMs'>>[];
+  focusThresholdState: RppgFocusThresholdState;
   fps: number;
   frameIndex: number;
   lastFrameTimeMs: number | null;
@@ -182,6 +185,7 @@ async function createSession(id: string | undefined, fps: number): Promise<RppgS
     state: cloneState(runtime.initialState),
     estimator: makeEstimator(fps),
     focusSamples: [],
+    focusThresholdState: createInitialRppgFocusThresholdState(),
     fps,
     frameIndex: 0,
     lastFrameTimeMs: null,
@@ -333,6 +337,7 @@ export async function runRppgFrame(request: RppgFrameRequest): Promise<RppgFrame
     fps: session.fps,
     minSamples: Math.max(90, Math.round(session.fps * 8)),
     minDurationSeconds: 15,
+    focusThresholdState: session.focusThresholdState,
   });
   const stats = estimatorStats(session.estimator);
   const frameIndex = session.frameIndex;
