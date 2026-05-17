@@ -50,6 +50,31 @@ HEART_TREND_DELTA = _get_float_env("HEART_TREND_DELTA", 2.0)
 MIN_HEART_RATE = _get_float_env("MIN_HEART_RATE", 40.0)
 MAX_HEART_RATE = _get_float_env("MAX_HEART_RATE", 200.0)
 
+# LLM feedback. Calls Amazon Bedrock Runtime through the standard regional
+# endpoint. In private subnets this uses the existing NAT gateway route unless
+# a VPC interface endpoint is added later.
+AWS_REGION = (
+    os.getenv("AWS_REGION")
+    or os.getenv("AWS_DEFAULT_REGION")
+    or "ap-northeast-2"
+).strip()
+BEDROCK_REGION = os.getenv("BEDROCK_REGION", AWS_REGION).strip()
+BEDROCK_MODEL_ID = os.getenv(
+    "BEDROCK_MODEL_ID",
+    "anthropic.claude-sonnet-4-5-20250929-v1:0",
+).strip()
+BEDROCK_MAX_OUTPUT_TOKENS = _get_int_env("BEDROCK_MAX_OUTPUT_TOKENS", 700)
+BEDROCK_TEMPERATURE = _get_float_env("BEDROCK_TEMPERATURE", 0.2)
+BEDROCK_CONNECT_TIMEOUT_SECONDS = _get_float_env(
+    "BEDROCK_CONNECT_TIMEOUT_SECONDS",
+    3.0,
+)
+BEDROCK_READ_TIMEOUT_SECONDS = _get_float_env(
+    "BEDROCK_READ_TIMEOUT_SECONDS",
+    20.0,
+)
+BEDROCK_MAX_ATTEMPTS = _get_int_env("BEDROCK_MAX_ATTEMPTS", 2)
+
 
 def session_records_key(user_id: str, session_id: str) -> str:
     """Redis list key Node.js should RPUSH per-second records into."""

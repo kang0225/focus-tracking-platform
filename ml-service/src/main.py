@@ -67,6 +67,10 @@ app.add_middleware(
 class AnalyzeRequest(BaseModel):
     userId: str = Field(..., description="User ID")
     sessionId: str = Field(..., description="Study session ID")
+    include_feedback: bool = Field(
+        True,
+        description="Generate a final study habit feedback string from minute analysis",
+    )
     delete_after: bool = Field(
         False,
         description="Delete Redis session records after a successful analysis",
@@ -116,6 +120,8 @@ class AnalyzeResponse(BaseModel):
     duration_minutes: int
     summary: AnalysisSummary
     minutes: list[MinuteAnalysis]
+    feedback: Optional[str] = None
+    feedback_source: Optional[str] = None
 
 
 class DeleteSessionResponse(BaseModel):
@@ -148,6 +154,7 @@ async def analyze(req: AnalyzeRequest) -> dict[str, object]:
             user_id=req.userId,
             session_id=req.sessionId,
             delete_after=req.delete_after,
+            include_feedback=req.include_feedback,
             redis_client=get_redis_client(),
         )
     except SessionDataNotFoundError as exc:

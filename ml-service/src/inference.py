@@ -7,6 +7,7 @@ from typing import Any
 
 import redis.asyncio as redis
 
+from src.llm_feedback import generate_study_feedback
 from src.model import (
     calculate_focus_score,
     classify_focus_state,
@@ -127,6 +128,7 @@ async def analyze_session(
     user_id: str,
     session_id: str,
     delete_after: bool = False,
+    include_feedback: bool = True,
     redis_client: redis.Redis | None = None,
 ) -> dict[str, Any]:
     """
@@ -186,12 +188,26 @@ async def analyze_session(
         if delete_after:
             await delete_session_records(user_id, session_id, client)
 
+        summary = _build_summary(minutes)
+        feedback: str | None = None
+        feedback_source: str | None = None
+        if include_feedback:
+            feedback, feedback_source = await generate_study_feedback(
+                user_id=user_id,
+                session_id=session_id,
+                duration_minutes=len(minutes),
+                summary=summary,
+                minutes=minutes,
+            )
+
         return {
             "userId": user_id,
             "sessionId": session_id,
             "duration_minutes": len(minutes),
-            "summary": _build_summary(minutes),
+            "summary": summary,
             "minutes": minutes,
+            "feedback": feedback,
+            "feedback_source": feedback_source,
         }
     finally:
         if owns_client:
