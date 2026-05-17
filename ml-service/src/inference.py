@@ -1,4 +1,4 @@
-"""Session analysis orchestration for the focus tracking ML service."""
+"""집중도 추적 ML 서비스의 세션 분석 흐름을 조율한다."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from src.preprocessing import (
 
 
 class SessionDataNotFoundError(ValueError):
-    """Raised when Redis has no records for the requested session."""
+    """요청한 세션의 기록이 Redis에 없을 때 발생하는 예외."""
 
 
 def create_redis_client() -> redis.Redis:
@@ -36,9 +36,9 @@ async def fetch_session_records(
     redis_client: redis.Redis,
 ) -> list[dict[str, Any]]:
     """
-    Fetch records that the Node.js backend wrote directly to Redis.
+    Node.js 백엔드가 Redis에 직접 기록한 데이터를 가져온다.
 
-    Expected Redis shape:
+    예상 Redis 형태:
         key: study:session:{userId}:{sessionId}:records
         type: list
         write command: RPUSH key json_string
@@ -132,11 +132,11 @@ async def analyze_session(
     redis_client: redis.Redis | None = None,
 ) -> dict[str, Any]:
     """
-    Analyze one session.
+    하나의 세션을 분석한다.
 
-    Threshold values are expected to be sent by Node.js with each record and
-    stored in Redis. This service consumes the per-window average threshold and
-    does not update low/high threshold means internally.
+    임계값은 Node.js가 각 기록과 함께 보내 Redis에 저장한다고 가정한다.
+    이 서비스는 윈도우별 평균 임계값을 사용하며, 내부에서 낮은 집중/높은 집중
+    평균 임계값을 갱신하지 않는다.
     """
     owns_client = redis_client is None
     client = redis_client or create_redis_client()

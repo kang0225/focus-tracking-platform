@@ -1,4 +1,4 @@
-"""Shared configuration values for the ML service."""
+"""ML 서비스에서 공통으로 사용하는 설정값."""
 
 import os
 
@@ -25,34 +25,34 @@ def _get_float_env(name: str, default: float) -> float:
         return default
 
 
-# Redis. Node.js writes records directly to this Redis instance; FastAPI only
-# reads the session list during /analyze.
+# Redis 설정. Node.js가 이 Redis에 직접 기록을 쓰고,
+# FastAPI는 /analyze 요청 시 세션 목록만 읽는다.
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = _get_int_env("REDIS_PORT", 6379)
 SESSION_TTL_SECONDS = _get_int_env("SESSION_TTL_SECONDS", 86_400)
 
-# Windowing
+# 윈도우 분할 설정
 WINDOW_SIZE = _get_int_env("WINDOW_SIZE", 60)
 GAZE_MISSING_EXCLUDE_SECONDS = _get_int_env("GAZE_MISSING_EXCLUDE_SECONDS", 30)
 
-# Focus score and threshold defaults
+# 집중도 점수와 임계값 기본 설정
 EPSILON = _get_float_env("EPSILON", 1e-6)
 INITIAL_THRESHOLD = _get_float_env("INITIAL_THRESHOLD", 17.183)
 THRESHOLD_RATIO = _get_float_env("THRESHOLD_RATIO", 0.33)
 EMA_ALPHA = _get_float_env("EMA_ALPHA", 0.1)
 MIN_GAP = _get_float_env("MIN_GAP", 1.0)
 
-# Trend classification
+# 추세 분류 설정
 FOCUS_TREND_DELTA = _get_float_env("FOCUS_TREND_DELTA", 0.5)
 HEART_TREND_DELTA = _get_float_env("HEART_TREND_DELTA", 2.0)
 
-# Basic physiological guardrails
+# 기본 생체 신호 유효 범위
 MIN_HEART_RATE = _get_float_env("MIN_HEART_RATE", 40.0)
 MAX_HEART_RATE = _get_float_env("MAX_HEART_RATE", 200.0)
 
-# LLM feedback. Calls Amazon Bedrock Runtime through the standard regional
-# endpoint. In private subnets this uses the existing NAT gateway route unless
-# a VPC interface endpoint is added later.
+# LLM 피드백 설정. Amazon Bedrock Runtime의 기본 리전 엔드포인트를 호출한다.
+# VPC 인터페이스 엔드포인트를 나중에 추가하지 않는 한,
+# 프라이빗 서브넷에서는 기존 NAT 게이트웨이 경로를 사용한다.
 AWS_REGION = (
     os.getenv("AWS_REGION")
     or os.getenv("AWS_DEFAULT_REGION")
@@ -77,5 +77,5 @@ BEDROCK_MAX_ATTEMPTS = _get_int_env("BEDROCK_MAX_ATTEMPTS", 2)
 
 
 def session_records_key(user_id: str, session_id: str) -> str:
-    """Redis list key Node.js should RPUSH per-second records into."""
+    """Node.js가 초 단위 기록을 RPUSH해야 하는 Redis 리스트 키."""
     return f"study:session:{user_id}:{session_id}:records"

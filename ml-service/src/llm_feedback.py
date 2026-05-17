@@ -1,4 +1,4 @@
-"""LLM-backed study habit feedback for analyzed session windows."""
+"""분석된 세션 윈도우를 바탕으로 LLM 학습 습관 피드백을 생성한다."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def build_local_feedback(
     summary: dict[str, Any],
     minutes: list[dict[str, Any]],
 ) -> str:
-    """Return deterministic feedback when an LLM key is unavailable or fails."""
+    """LLM 설정이 없거나 호출에 실패했을 때 사용할 결정적 피드백을 반환한다."""
     if duration_minutes <= 0:
         return "분석 가능한 학습 시간이 충분하지 않습니다. 다음 세션에서는 최소 몇 분 이상 안정적으로 측정한 뒤 다시 확인해 주세요."
 
@@ -213,9 +213,9 @@ async def generate_study_feedback(
     minutes: list[dict[str, Any]],
 ) -> tuple[str, str]:
     """
-    Generate Korean study feedback.
+    한국어 학습 피드백을 생성한다.
 
-    Returns (feedback, source), where source is "bedrock" or "local_fallback".
+    (피드백, 출처)를 반환하며, 출처는 "bedrock" 또는 "local_fallback"이다.
     """
     fallback = build_local_feedback(duration_minutes, summary, minutes)
     if not BEDROCK_MODEL_ID:

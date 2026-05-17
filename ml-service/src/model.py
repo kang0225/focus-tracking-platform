@@ -1,4 +1,4 @@
-"""Focus score, threshold helper, and state classification functions."""
+"""집중도 점수, 임계값 보조 함수, 상태 분류 함수."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from src.params import (
 
 
 def finite_values(values: Iterable[float] | np.ndarray | None) -> np.ndarray:
-    """Return finite numeric values as a one-dimensional numpy array."""
+    """유효한 숫자 값만 1차원 numpy 배열로 반환한다."""
     if values is None:
         return np.array([], dtype=float)
 
@@ -32,7 +32,7 @@ def finite_values(values: Iterable[float] | np.ndarray | None) -> np.ndarray:
 
 
 def calculate_rri(heart_rate: Optional[float]) -> Optional[float]:
-    """Estimate RR interval in milliseconds from heart rate."""
+    """심박수로부터 밀리초 단위 RR 간격을 추정한다."""
     if heart_rate is None:
         return None
 
@@ -48,7 +48,7 @@ def calculate_rri(heart_rate: Optional[float]) -> Optional[float]:
 
 
 def calculate_rmssd(rppg_values: Iterable[float] | np.ndarray | None) -> float:
-    """Approximate rMSSD from consecutive rPPG differences."""
+    """연속된 rPPG 차이값으로 rMSSD를 근사한다."""
     values = finite_values(rppg_values)
     if len(values) < 2:
         return EPSILON
@@ -59,7 +59,7 @@ def calculate_rmssd(rppg_values: Iterable[float] | np.ndarray | None) -> float:
 
 
 def calculate_hf(rppg_values: Iterable[float] | np.ndarray | None) -> float:
-    """Approximate HF power using rPPG variance."""
+    """rPPG 분산을 사용해 HF 파워를 근사한다."""
     values = finite_values(rppg_values)
     if len(values) < 2:
         return EPSILON
@@ -73,9 +73,9 @@ def calculate_focus_score(
     rppg_values: Iterable[float] | np.ndarray | None,
 ) -> Optional[float]:
     """
-    Calculate focus score.
+    집중도 점수를 계산한다.
 
-    Formula:
+    공식:
         Focus Score = RRI / 100 + ln(rMSSD) + ln(HF)
     """
     rri = calculate_rri(heart_rate)
@@ -105,11 +105,10 @@ def update_ema(
     alpha: float = EMA_ALPHA,
 ) -> float:
     """
-    Return an EMA-updated mean.
+    EMA로 갱신된 평균값을 반환한다.
 
-    Node.js owns threshold updates in the current architecture. This helper is
-    kept here so the analysis engine can adopt service-side calibration later
-    without changing the public API.
+    현재 구조에서는 Node.js가 임계값 갱신을 담당한다. 나중에 공개 API 변경 없이
+    분석 엔진이 서비스 내부 보정 방식을 채택할 수 있도록 이 보조 함수를 유지한다.
     """
     return float(alpha * current_focus_score + (1.0 - alpha) * old_mean)
 
@@ -121,10 +120,10 @@ def calculate_threshold(
     min_gap: float = MIN_GAP,
 ) -> float:
     """
-    Calculate dynamic threshold from low/high focus means.
+    낮은 집중/높은 집중 평균값으로 동적 임계값을 계산한다.
 
-    This is a helper for future ML-service-owned threshold calibration. The
-    current inference path consumes the threshold sent by Node.js instead.
+    향후 ML 서비스가 임계값 보정을 직접 담당할 때 사용할 보조 함수다.
+    현재 추론 경로에서는 Node.js가 보낸 임계값을 사용한다.
     """
     gap = high_focus_mean - low_focus_mean
     if gap < min_gap:

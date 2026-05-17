@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for Redis-backed session analysis."""
+"""Redis 기반 세션 분석을 제공하는 FastAPI 진입점."""
 
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ def get_redis_client() -> redis.Redis:
 app = FastAPI(
     title="Focus Tracking ML Service",
     description=(
-        "Reads per-second study records written directly to Redis by the "
-        "Node.js backend and returns minute-level focus analysis."
+        "Node.js 백엔드가 Redis에 직접 기록한 초 단위 학습 데이터를 읽고 "
+        "분 단위 집중도 분석 결과를 반환한다."
     ),
     version="1.0.0",
     lifespan=lifespan,
@@ -65,15 +65,15 @@ app.add_middleware(
 
 
 class AnalyzeRequest(BaseModel):
-    userId: str = Field(..., description="User ID")
-    sessionId: str = Field(..., description="Study session ID")
+    userId: str = Field(..., description="사용자 ID")
+    sessionId: str = Field(..., description="학습 세션 ID")
     include_feedback: bool = Field(
         True,
-        description="Generate a final study habit feedback string from minute analysis",
+        description="분 단위 분석 결과로 최종 학습 습관 피드백 문자열을 생성할지 여부",
     )
     delete_after: bool = Field(
         False,
-        description="Delete Redis session records after a successful analysis",
+        description="분석 성공 후 Redis 세션 기록을 삭제할지 여부",
     )
 
 

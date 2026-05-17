@@ -1,4 +1,4 @@
-"""Preprocessing utilities for per-second tracking records."""
+"""초 단위 추적 기록을 전처리하는 유틸리티."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def _nested_number(value: Any, key: str) -> Any:
 
 
 def _normalize_record_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Accept the canonical Redis record shape and a few backend-friendly aliases."""
+    """표준 Redis 기록 형태와 백엔드에서 쓰기 쉬운 별칭 필드를 함께 허용한다."""
     normalized = df.copy()
 
     if "gaze" in normalized.columns:
@@ -72,7 +72,7 @@ def _normalize_record_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def preprocess_tracking_data(raw_records: list[dict[str, Any]]) -> pd.DataFrame:
-    """Convert raw Redis records to a sorted DataFrame with gazeMissing."""
+    """Redis 원본 기록을 gazeMissing 컬럼이 포함된 정렬된 DataFrame으로 변환한다."""
     if not raw_records:
         raise ValueError("No records to preprocess.")
 
@@ -102,7 +102,7 @@ def split_into_windows(
     df: pd.DataFrame,
     window_size: int = WINDOW_SIZE,
 ) -> list[pd.DataFrame]:
-    """Split sorted records into fixed elapsed-time windows."""
+    """정렬된 기록을 고정된 경과 시간 기준 윈도우로 나눈다."""
     if df.empty:
         return []
     if window_size <= 0:
@@ -126,7 +126,7 @@ def split_into_windows(
 
 
 def calculate_slope(values: np.ndarray) -> float:
-    """Return a simple linear slope for finite values."""
+    """유효한 숫자 값들에 대해 단순 선형 기울기를 반환한다."""
     finite = values[np.isfinite(values)]
     if len(finite) < 2:
         return 0.0
@@ -163,7 +163,7 @@ def calculate_window_features(
     window: pd.DataFrame,
     minute_index: int,
 ) -> dict[str, Any]:
-    """Calculate all per-minute features used by inference."""
+    """추론에서 사용하는 1분 단위 특징값을 계산한다."""
     if window.empty:
         raise ValueError("Cannot calculate features for an empty window.")
 

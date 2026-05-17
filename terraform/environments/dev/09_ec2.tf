@@ -113,6 +113,13 @@ resource "aws_instance" "ml_ec2" {
     volume_type = "gp3"
   }
 
+  # ★ Docker 컨테이너 안에서 IMDSv2로 IAM 자격증명 가져오려면 hop limit 2 필요
+  metadata_options {
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 2
+  }
+  
   # ML 전용 프로파일 연결
   iam_instance_profile = aws_iam_instance_profile.ml_ec2_profile.name
   associate_public_ip_address = false
