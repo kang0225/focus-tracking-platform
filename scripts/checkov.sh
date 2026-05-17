@@ -18,19 +18,19 @@ else
 fi
 
 if [ ! -x "$CHECKOV_CMD" ]; then
-    echo "Error: checkov is not installed." >&2
-    echo "Install it with: pip install checkov" >&2
-    echo "If it is already installed, add the Python user bin directory to PATH:" >&2
+    echo "오류: checkov가 설치되어 있지 않습니다." >&2
+    echo "설치 명령: pip install checkov" >&2
+    echo "이미 설치했다면 Python 사용자 bin 디렉터리를 PATH에 추가하세요:" >&2
     echo '  export PATH="$HOME/.local/bin:$PATH"' >&2
     exit 127
 fi
 
 if [ ! -d "$TERRAFORM_DIR" ]; then
-    echo "Error: Terraform directory not found: $TERRAFORM_DIR" >&2
+    echo "오류: Terraform 디렉터리를 찾을 수 없습니다: $TERRAFORM_DIR" >&2
     exit 1
 fi
 
-echo "Running Checkov Terraform scan: $TERRAFORM_DIR"
+echo "Checkov Terraform 검사를 실행합니다: $TERRAFORM_DIR"
 
 "$CHECKOV_CMD" \
     --directory "$TERRAFORM_DIR" \
