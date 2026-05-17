@@ -124,6 +124,7 @@ export default function VideoRoomPage() {
     focusScore,
     focusIsFocused,
     focusThresholdRawScore,
+    rPPG,
   } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
@@ -169,6 +170,8 @@ export default function VideoRoomPage() {
       focusScore,
       focusIsFocused,
       focusThresholdRawScore,
+      rPPG,
+      threshold: focusThresholdRawScore,
       page: 'room',
     },
   });

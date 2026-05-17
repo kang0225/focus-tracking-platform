@@ -45,6 +45,7 @@ export function useConcentrationData() {
     focusScore: rppgFocusScore,
     focusRawScore: rppgFocusRawScore,
     focusMetrics: rppgFocusMetrics,
+    waveformValue: rppgWaveformValue,
   } = useRPPG('webgazerVideoFeed', phoneBpm <= 0);
 
   useEffect(() => {
@@ -172,6 +173,7 @@ export function useConcentrationData() {
     focusRawScore: phoneBpm <= 0 ? rppgFocusRawScore : null,
     focusThresholdRawScore,
     focusMetrics: phoneBpm <= 0 ? rppgFocusMetrics : null,
+    rPPG: phoneBpm <= 0 ? rppgWaveformValue : null,
     scriptsLoaded,
   };
 }

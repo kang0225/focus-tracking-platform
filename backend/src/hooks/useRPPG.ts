@@ -20,6 +20,7 @@ export interface RppgFocusResponse {
 interface FacePhysRppgResponse {
   sessionId: string;
   frameIndex: number;
+  waveformValue: number;
   bpm: number | null;
   rawBpm: number | null;
   confidence: number | null;
@@ -115,6 +116,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
   const [focusScore, setFocusScore] = useState<number | null>(null);
   const [focusRawScore, setFocusRawScore] = useState<number | null>(null);
   const [focusMetrics, setFocusMetrics] = useState<RppgFocusResponse | null>(null);
+  const [waveformValue, setWaveformValue] = useState<number | null>(null);
   const [status, setStatus] = useState('심박도 측정 준비 중');
   const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -126,6 +128,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
       setFocusScore(null);
       setFocusRawScore(null);
       setFocusMetrics(null);
+      setWaveformValue(null);
       setError(null);
       setStatus('심박도 측정 비활성화');
       return;
@@ -200,6 +203,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
         const payload = await response.json() as FacePhysRppgResponse;
         sessionIdRef.current = payload.sessionId;
         setError(null);
+        setWaveformValue(Number.isFinite(payload.waveformValue) ? payload.waveformValue : null);
 
         const focus = payload.focus ?? null;
         setFocusMetrics(focus);
@@ -226,6 +230,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
           setFocusScore(null);
           setFocusRawScore(null);
           setFocusMetrics(null);
+          setWaveformValue(null);
           setStatus('심박도 측정 오류');
           console.error('FacePhys rPPG 실행 실패:', err);
         }
@@ -263,6 +268,7 @@ export function useRPPG(videoElementId: string, enabled: boolean, fps = DEFAULT_
     focusScore,
     focusRawScore,
     focusMetrics,
+    waveformValue,
     status,
     error,
   };
