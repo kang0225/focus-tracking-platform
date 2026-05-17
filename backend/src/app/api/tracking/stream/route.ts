@@ -8,6 +8,11 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
   if (!value || typeof value !== 'object') return false;
 
   const payload = value as Partial<TrackingStreamPayload>;
+  const hasValidRppg = payload.rPPG == null || typeof payload.rPPG === 'number';
+  const hasValidThreshold = payload.threshold == null || typeof payload.threshold === 'number';
+  const hasValidFocusThresholdRawScore = payload.focusThresholdRawScore == null
+    || typeof payload.focusThresholdRawScore === 'number';
+
   return typeof payload.meetingId === 'string'
     && payload.meetingId.length > 0
     && typeof payload.userId === 'string'
@@ -18,7 +23,10 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
     && !!payload.gaze
     && typeof payload.gaze.x === 'number'
     && typeof payload.gaze.y === 'number'
-    && typeof payload.gaze.calibrated === 'boolean';
+    && typeof payload.gaze.calibrated === 'boolean'
+    && hasValidRppg
+    && hasValidThreshold
+    && hasValidFocusThresholdRawScore;
 }
 
 export async function POST(request: Request) {

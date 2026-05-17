@@ -44,9 +44,11 @@ export default function HomePage() {
     focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
+    rPPG,
   } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
   const focusDisplayScore = focusRawScore != null ? focusRawScore.toFixed(3) : '--';
+  const focusThreshold = focusThresholdRawScore;
 
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: isLoaded,
@@ -64,6 +66,8 @@ export default function HomePage() {
       focusScore: focusRawScore ?? undefined,
       focusIsFocused,
       focusThresholdRawScore,
+      rPPG,
+      threshold: focusThresholdRawScore,
       page: 'solo',
     },
   });
