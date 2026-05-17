@@ -2,10 +2,9 @@ const DEFAULT_MIN_BPM = 45;
 const DEFAULT_MAX_BPM = 180;
 const EPSILON = 1e-12;
 const RELIABLE_LOW_BPM = 58;
-const FOCUS_LOW_REFERENCE = Math.log(648.54 / 100) + Math.log(25.45) + Math.log(161.8);
-const FOCUS_HIGH_REFERENCE = Math.log(783.88 / 100) + Math.log(27.97) + Math.log(309.57);
-const FOCUS_REFERENCE_SPAN = FOCUS_HIGH_REFERENCE - FOCUS_LOW_REFERENCE;
-const FOCUS_THRESHOLD_RAW = (FOCUS_LOW_REFERENCE + FOCUS_HIGH_REFERENCE) / 2;
+const INITIAL_FOCUS_AVERAGE_RAW_SCORE = 17.183;
+const FOCUS_THRESHOLD_RATIO = 0.33;
+const MIN_FOCUS_NORMALIZATION_SPAN = 1;
 
 export interface TimestampedSample {
   value: number;
@@ -36,12 +35,59 @@ interface PpiSeries {
   intervalsMs: number[];
 }
 
+export interface RppgFocusThresholdState {
+  lowAverageRawScore: number;
+  highAverageRawScore: number;
+  lowSampleCount: number;
+  highSampleCount: number;
+}
+
 function isSampleObject(value: unknown): value is TimestampedSample {
   return !!value && typeof value === 'object' && 'value' in value;
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+export function createInitialRppgFocusThresholdState(): RppgFocusThresholdState {
+  return {
+    lowAverageRawScore: INITIAL_FOCUS_AVERAGE_RAW_SCORE,
+    highAverageRawScore: INITIAL_FOCUS_AVERAGE_RAW_SCORE,
+    lowSampleCount: 1,
+    highSampleCount: 1,
+  };
+}
+
+function focusThresholdRawScore(state: RppgFocusThresholdState) {
+  return state.lowAverageRawScore
+    + FOCUS_THRESHOLD_RATIO * (state.highAverageRawScore - state.lowAverageRawScore);
+}
+
+function updateRunningAverage(average: number, count: number, value: number) {
+  const nextCount = count + 1;
+  return {
+    average: average + ((value - average) / nextCount),
+    count: nextCount,
+  };
+}
+
+function classifyAndUpdateFocusThreshold(rawScore: number, state: RppgFocusThresholdState) {
+  const thresholdRawScore = focusThresholdRawScore(state);
+  const spanRawScore = Math.abs(state.highAverageRawScore - state.lowAverageRawScore);
+  const isFocused = rawScore >= thresholdRawScore;
+
+  if (isFocused) {
+    const next = updateRunningAverage(state.highAverageRawScore, state.highSampleCount, rawScore);
+    state.highAverageRawScore = next.average;
+    state.highSampleCount = next.count;
+  } else {
+    const next = updateRunningAverage(state.lowAverageRawScore, state.lowSampleCount, rawScore);
+    state.lowAverageRawScore = next.average;
+    state.lowSampleCount = next.count;
+  }
+
+  return { thresholdRawScore, spanRawScore, isFocused };
 }
 
 function median(values: number[]) {
@@ -512,8 +558,9 @@ function highFrequencyPpiPower(series: PpiSeries, sampleRate = 2) {
   return Math.max(bandPower, EPSILON);
 }
 
-function normalizeFocusScore(rawScore: number) {
-  const normalized = 50 + ((rawScore - FOCUS_THRESHOLD_RAW) / Math.max(FOCUS_REFERENCE_SPAN, EPSILON)) * 50;
+function normalizeFocusScore(rawScore: number, thresholdRawScore: number, spanRawScore: number) {
+  const normalized = 50
+    + ((rawScore - thresholdRawScore) / Math.max(spanRawScore, MIN_FOCUS_NORMALIZATION_SPAN, EPSILON)) * 50;
   return Math.round(clamp(normalized, 0, 100));
 }
 
@@ -653,6 +700,7 @@ export function estimateRppgFocus(samples: TimestampedSample[], {
   minSamples = 120,
   minDurationSeconds = 15,
   minIntervals = 8,
+  focusThresholdState = createInitialRppgFocusThresholdState(),
 }: {
   fps?: number;
   minBpm?: number;
@@ -660,6 +708,7 @@ export function estimateRppgFocus(samples: TimestampedSample[], {
   minSamples?: number;
   minDurationSeconds?: number;
   minIntervals?: number;
+  focusThresholdState?: RppgFocusThresholdState;
 } = {}): RppgFocusEstimate | null {
   const { values, timesSeconds, durationSeconds } = normalizeSamples(samples, fps);
   const sampleCount = values.length;
@@ -698,12 +747,13 @@ export function estimateRppgFocus(samples: TimestampedSample[], {
   }
 
   const rawScore = Math.log(ppiMs / 100) + Math.log(rmssdPpiMs) + Math.log(hfPpiPower);
+  const focusDecision = classifyAndUpdateFocusThreshold(rawScore, focusThresholdState);
 
   return {
-    score: normalizeFocusScore(rawScore),
+    score: normalizeFocusScore(rawScore, focusDecision.thresholdRawScore, focusDecision.spanRawScore),
     rawScore: Number(rawScore.toFixed(3)),
-    thresholdRawScore: Number(FOCUS_THRESHOLD_RAW.toFixed(3)),
-    isFocused: rawScore >= FOCUS_THRESHOLD_RAW,
+    thresholdRawScore: Number(focusDecision.thresholdRawScore.toFixed(3)),
+    isFocused: focusDecision.isFocused,
     ppiMs: Number(ppiMs.toFixed(1)),
     rmssdPpiMs: Number(rmssdPpiMs.toFixed(1)),
     hfPpiPower: Number(hfPpiPower.toFixed(3)),

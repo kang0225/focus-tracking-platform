@@ -1,122 +1,175 @@
-# src/model.py
+"""Focus score, threshold helper, and state classification functions."""
 
-from typing import Optional
+from __future__ import annotations
 
-import joblib
+import math
+from typing import Iterable, Optional
+
 import numpy as np
-import pandas as pd
 
-from src.params import MODEL_PATH
+from src.params import (
+    EMA_ALPHA,
+    EPSILON,
+    FOCUS_TREND_DELTA,
+    HEART_TREND_DELTA,
+    INITIAL_THRESHOLD,
+    MIN_GAP,
+    THRESHOLD_RATIO,
+)
 
 
-class FocusModel:
+def finite_values(values: Iterable[float] | np.ndarray | None) -> np.ndarray:
+    """Return finite numeric values as a one-dimensional numpy array."""
+    if values is None:
+        return np.array([], dtype=float)
+
+    try:
+        array = np.asarray(values, dtype=float).reshape(-1)
+    except (TypeError, ValueError):
+        return np.array([], dtype=float)
+
+    return array[np.isfinite(array)]
+
+
+def calculate_rri(heart_rate: Optional[float]) -> Optional[float]:
+    """Estimate RR interval in milliseconds from heart rate."""
+    if heart_rate is None:
+        return None
+
+    try:
+        value = float(heart_rate)
+    except (TypeError, ValueError):
+        return None
+
+    if not math.isfinite(value) or value <= 0:
+        return None
+
+    return 60_000.0 / value
+
+
+def calculate_rmssd(rppg_values: Iterable[float] | np.ndarray | None) -> float:
+    """Approximate rMSSD from consecutive rPPG differences."""
+    values = finite_values(rppg_values)
+    if len(values) < 2:
+        return EPSILON
+
+    differences = np.diff(values)
+    rmssd = float(np.sqrt(np.mean(differences * differences)))
+    return max(rmssd, EPSILON)
+
+
+def calculate_hf(rppg_values: Iterable[float] | np.ndarray | None) -> float:
+    """Approximate HF power using rPPG variance."""
+    values = finite_values(rppg_values)
+    if len(values) < 2:
+        return EPSILON
+
+    hf_power = float(np.var(values))
+    return max(hf_power, EPSILON)
+
+
+def calculate_focus_score(
+    heart_rate: Optional[float],
+    rppg_values: Iterable[float] | np.ndarray | None,
+) -> Optional[float]:
     """
-    집중도 예측 모델 wrapper.
+    Calculate focus score.
 
-    현재는 실제 모델이 없을 수 있으므로 dummy 예측을 지원한다.
-    나중에 focus_model.pkl이 준비되면 USE_DUMMY_MODEL=false로 바꾸면 된다.
+    Formula:
+        Focus Score = RRI / 100 + ln(rMSSD) + ln(HF)
     """
+    rri = calculate_rri(heart_rate)
+    values = finite_values(rppg_values)
 
-    def __init__(self):
-        self.model = None
-        self.use_dummy = USE_DUMMY_MODEL
+    if rri is None or len(values) < 2:
+        return None
 
-        if not self.use_dummy:
-            self.model = self._load_model(MODEL_PATH)
+    try:
+        rmssd = calculate_rmssd(values)
+        hf_power = calculate_hf(values)
+        score = (rri / 100.0) + math.log(max(rmssd, EPSILON)) + math.log(
+            max(hf_power, EPSILON)
+        )
+    except (OverflowError, ValueError):
+        return None
 
-    def _load_model(self, model_path: str):
-        try:
-            return joblib.load(model_path)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_path}")
-        except Exception as e:
-            raise RuntimeError(f"모델 로드 중 오류 발생: {str(e)}")
+    if not math.isfinite(score):
+        return None
 
-    def _make_features(self, window: pd.DataFrame) -> np.ndarray:
-        """
-        60개 row를 하나의 feature vector로 변환한다.
-
-        입력 컬럼:
-        - heartRate
-        - gazeX
-        - gazeY
-
-        출력 예:
-        [
-          heartRate_mean,
-          heartRate_std,
-          gazeX_mean,
-          gazeX_std,
-          gazeY_mean,
-          gazeY_std,
-          gaze_movement
-        ]
-        """
-
-        heart_rate_mean = window["heartRate"].mean()
-        heart_rate_std = window["heartRate"].std()
-
-        gaze_x_mean = window["gazeX"].mean()
-        gaze_x_std = window["gazeX"].std()
-
-        gaze_y_mean = window["gazeY"].mean()
-        gaze_y_std = window["gazeY"].std()
-
-        gaze_x_range = window["gazeX"].max() - window["gazeX"].min()
-        gaze_y_range = window["gazeY"].max() - window["gazeY"].min()
-        gaze_movement = gaze_x_range + gaze_y_range
-
-        features = np.array([[
-            heart_rate_mean,
-            heart_rate_std,
-            gaze_x_mean,
-            gaze_x_std,
-            gaze_y_mean,
-            gaze_y_std,
-            gaze_movement,
-        ]])
-
-        return features
-
-    def predict_window(self, window: pd.DataFrame) -> dict:
-        """
-        하나의 window에 대해 집중도 예측을 수행한다.
-        """
-
-        features = self._make_features(window)
-
-        avg_heart_rate = float(window["heartRate"].mean())
-
-        gaze_x_range = window["gazeX"].max() - window["gazeX"].min()
-        gaze_y_range = window["gazeY"].max() - window["gazeY"].min()
-        gaze_movement = float(gaze_x_range + gaze_y_range)
-
-        if self.use_dummy:
-            # 임시 예측값
-            focus_score = 0.75
-        else:
-            prediction = self.model.predict(features)
-            focus_score = float(prediction[0])
-
-        return {
-            "avgHeartRate": avg_heart_rate,
-            "gazeMovement": gaze_movement,
-            "focusScore": float(focus_score),
-        }
+    return float(score)
 
 
-focus_model: Optional[FocusModel] = None
-
-
-def get_focus_model() -> FocusModel:
+def update_ema(
+    old_mean: float,
+    current_focus_score: float,
+    alpha: float = EMA_ALPHA,
+) -> float:
     """
-    모델은 요청마다 로드하면 느리므로,
-    서버 프로세스에서 한 번만 생성해서 재사용한다.
+    Return an EMA-updated mean.
+
+    Node.js owns threshold updates in the current architecture. This helper is
+    kept here so the analysis engine can adopt service-side calibration later
+    without changing the public API.
     """
+    return float(alpha * current_focus_score + (1.0 - alpha) * old_mean)
 
-    global focus_model
 
-    if focus_model is None:
-        focus_model = FocusModel()
+def calculate_threshold(
+    low_focus_mean: float,
+    high_focus_mean: float,
+    ratio: float = THRESHOLD_RATIO,
+    min_gap: float = MIN_GAP,
+) -> float:
+    """
+    Calculate dynamic threshold from low/high focus means.
 
-    return focus_model
+    This is a helper for future ML-service-owned threshold calibration. The
+    current inference path consumes the threshold sent by Node.js instead.
+    """
+    gap = high_focus_mean - low_focus_mean
+    if gap < min_gap:
+        return INITIAL_THRESHOLD
+
+    return float(low_focus_mean + ratio * gap)
+
+
+def classify_focus_state(
+    focus_score: Optional[float],
+    threshold: Optional[float],
+) -> str:
+    if focus_score is None or threshold is None:
+        return "unknown"
+
+    return "high_focus" if focus_score >= threshold else "low_focus"
+
+
+def classify_focus_trend(
+    current_focus_score: Optional[float],
+    previous_focus_score: Optional[float],
+    delta: float = FOCUS_TREND_DELTA,
+) -> str:
+    if current_focus_score is None or previous_focus_score is None:
+        return "stable"
+
+    diff = current_focus_score - previous_focus_score
+    if diff > delta:
+        return "up"
+    if diff < -delta:
+        return "down"
+    return "stable"
+
+
+def classify_heart_trend(
+    current_hr_mean: Optional[float],
+    previous_hr_mean: Optional[float],
+    delta: float = HEART_TREND_DELTA,
+) -> str:
+    if current_hr_mean is None or previous_hr_mean is None:
+        return "stable"
+
+    diff = current_hr_mean - previous_hr_mean
+    if diff > delta:
+        return "up"
+    if diff < -delta:
+        return "down"
+    return "stable"
