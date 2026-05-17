@@ -145,3 +145,25 @@ resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
   role       = aws_iam_role.codedeploy_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
+
+################################
+### ML EC2 Bedrock 권한 추가 ###
+################################
+
+# ml-service가 boto3로 Bedrock(Claude Sonnet 4.5)를 호출하기 위한 권한
+resource "aws_iam_role_policy" "ml_ec2_bedrock" {
+  name = "${var.project_name}-${var.environment}-bedrock-invoke"
+  role = aws_iam_role.ml_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AllowBedrockInvokeClaudeSonnet"
+      Effect = "Allow"
+      Action = ["bedrock:InvokeModel"]
+      Resource = [
+        "arn:aws:bedrock:ap-northeast-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+      ]
+    }]
+  })
+}
