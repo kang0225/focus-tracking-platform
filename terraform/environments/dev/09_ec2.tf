@@ -71,6 +71,13 @@ resource "aws_instance" "db_ec2" {
     encrypted             = true
   }
 
+  # ★ 추가: IMDSv2 강제 (CKV_AWS_79)
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
+
   # DB 전용 프로파일 연결
   iam_instance_profile = aws_iam_instance_profile.db_ec2_profile.name
   associate_public_ip_address = false
@@ -87,6 +94,7 @@ resource "aws_instance" "ml_ec2" {
   instance_type          = "t4g.small"
   subnet_id              = aws_subnet.private_app_a.id
   vpc_security_group_ids = [aws_security_group.ml_sg.id]
+  ebs_optimized          = true
 
   root_block_device {
     volume_size = 30
