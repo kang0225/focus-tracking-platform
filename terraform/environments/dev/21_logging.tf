@@ -33,6 +33,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
+  # 오래된 로그 자동 정리 (기존 rule)
   rule {
     id     = "manage-old-logs"
     status = "Enabled"
@@ -48,8 +49,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
       days = 90
     }
   }
-}
 
+  # ★ 추가: 실패한 멀티파트 업로드 자동 정리 (CKV_AWS_300)
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
 ##############################################
 #### 2. ALB Access Logs 권한               ####
 ##############################################
@@ -148,5 +160,14 @@ resource "aws_flow_log" "main" {
 
   tags = {
     Name = "${var.project_name}-${var.environment}-vpc-flow-log"
+  }
+}
+
+# ★ 추가: S3 logs 버킷 versioning 활성화 (CKV_AWS_21)
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }
