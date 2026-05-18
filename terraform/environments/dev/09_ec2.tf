@@ -45,37 +45,17 @@ data "aws_ssm_parameter" "ecs_ami_arm" {
 ### EC2 생성 ###
 ###############
 
-# 1. 앱 서버 (Web EC2)
-resource "aws_instance" "app_ec2" {
-  ami                   = data.aws_ssm_parameter.ecs_ami_arm.value
-  instance_type          = "t4g.medium"
-  subnet_id              = aws_subnet.private_app_a.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-  root_block_device {
-    volume_size           = 30
-    volume_type           = "gp3"
-    delete_on_termination = true
-    encrypted             = true
-  }
 
-  # 웹용 프로파일 연결
-  iam_instance_profile = aws_iam_instance_profile.web_ec2_profile.name
-  associate_public_ip_address = false
+# ====================================================
+# 1. 앱 서버 (Web EC2) — ASG 기반으로 이관됨
+# ====================================================
+# 기존 단일 EC2 → Launch Template + Auto Scaling Group
+# 새 위치: 24_capacity_provider.tf
+# 이관 이유: ECS Capacity Provider를 통한 자동 EC2 확장/축소 지원
+# ====================================================
 
-  # EC2가 켜질 때 이 스크립트가 실행됨
-  # /etc/ecs/ecs.config 파일에 "어느 클러스터에 조인할지" 써주면
-  # ECS 에이전트가 그 파일을 읽고 자동으로 클러스터에 등록함
-  user_data = <<-EOT
-    #!/bin/bash
-    echo "ECS_CLUSTER=${aws_ecs_cluster.main.name}" >> /etc/ecs/ecs.config
-  EOT
 
-  tags = {
-    Name        = "app-ec2"
-    Environment = var.environment
-  }
-}
 
 # 2. DB 서버 (DB EC2)
 resource "aws_instance" "db_ec2" {
