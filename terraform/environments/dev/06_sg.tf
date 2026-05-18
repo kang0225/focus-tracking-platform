@@ -1,3 +1,55 @@
+#######################
+### Security Groups ###
+#######################
+
+# ALB 
+resource "aws_security_group" "alb_sg" {
+  name        = "${var.project_name}-${var.environment}-alb-sg"
+  description = "Security group for FocusTracker ALB"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  }
+}
+
+# Web EC2 
+resource "aws_security_group" "web_sg" {
+  name        = "${var.project_name}-${var.environment}-web-sg"
+  description = "Security group for Web Interface EC2"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-web-sg"
+  }
+}
+
+# Data EC2 
+resource "aws_security_group" "db_sg" {
+  name        = "${var.project_name}-${var.environment}-db-sg"
+  description = "Security group for Data Processing EC2"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-db-sg"
+  }
+}
+
+# ML EC2
+resource "aws_security_group" "ml_sg" {
+  name        = "${var.project_name}-${var.environment}-ml-sg"
+  description = "Security group for ML Inference EC2"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ml-sg"
+  }
+}
+
+########################
+### SG Rules (Rules) ###
+########################
+
 # 1. ALB Rules
 resource "aws_security_group_rule" "alb_ingress_http" {
   type              = "ingress"
