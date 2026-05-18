@@ -64,7 +64,8 @@ command -v python3 >/dev/null 2>&1 || { echo "${RED}python3 필요${NC}" >&2; ex
 # 공통 유틸
 # ============================================================
 
-py() { python3 -c "$1"; }
+# -W ignore : Python deprecation 경고 무시 (출력 깔끔하게)
+py() { python3 -W ignore -c "$1"; }
 
 hr() {
     echo "${DIM}─────────────────────────────────────────────────────────────────${NC}"
@@ -163,14 +164,14 @@ print(f'  Status:            {status_color}{status}${NC}')
 print(f'  Task Definition:   {td}')
 print(f'  Tasks:             {task_color}desired={desired}  running={running}  pending={pending}${NC}')
 print(f'  Capacity Provider: {cp}')
-print(f'  Created:           {s[\"createdAt\"][:19].replace(\"T\", \" \")}')
+print(f'  Created:           {str(s[\"createdAt\"])[:19].replace(\"T\", \" \")}')
 
 # 최근 이벤트 5개
 print()
 print('  ${DIM}최근 이벤트:${NC}')
 for e in s.get('events', [])[:5]:
     msg = e['message']
-    ts = e['createdAt'][:19].replace('T', ' ')
+    ts = str(e['createdAt'])[:19].replace('T', ' ')
     if 'unable' in msg.lower() or 'failed' in msg.lower():
         color = '${RED}'
     elif 'steady state' in msg.lower():
@@ -211,7 +212,7 @@ d = json.load(sys.stdin)['deploymentInfo']
 print(f'  ${YLW}● 배포 진행 중${NC}')
 print(f'  Deployment ID: {d[\"deploymentId\"]}')
 print(f'  Status:        {d[\"status\"]}')
-print(f'  Started:       {d[\"createTime\"][:19].replace(\"T\", \" \")}')
+print(f'  Started:       {str(d[\"createTime\"])[:19].replace(\"T\", \" \")}')
 overview = d.get('deploymentOverview', {})
 print(f'  Progress:      Pending={overview.get(\"Pending\",0)} InProgress={overview.get(\"InProgress\",0)} Succeeded={overview.get(\"Succeeded\",0)} Failed={overview.get(\"Failed\",0)}')
 "
@@ -265,6 +266,12 @@ for inst in d['AutoScalingGroups'][0]['Instances']:
         return
     fi
 
+    local start_5m end_now
+    start_5m=$(py "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(minutes=5)).strftime('%Y-%m-%dT%H:%M:%S'))")
+    end_now=$(py "from datetime import datetime,timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'))")
+    local start_10m
+    start_10m=$(py "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S'))")
+
     while IFS=$'\t' read -r id itype az state health; do
         # 최근 CPU
         local cpu
@@ -273,8 +280,7 @@ for inst in d['AutoScalingGroups'][0]['Instances']:
             --metric-name CPUUtilization \
             --dimensions Name=InstanceId,Value="$id" \
             --statistics Average \
-            --start-time "$(py "from datetime import datetime,timedelta; print((datetime.utcnow()-timedelta(minutes=5)).strftime('%Y-%m-%dT%H:%M:%S'))")" \
-            --end-time "$(py "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")" \
+            --start-time "$start_5m" --end-time "$end_now" \
             --period 60 \
             --region "$AWS_REGION" \
             --output json 2>/dev/null | py "
@@ -289,8 +295,7 @@ print(f'{sorted(d, key=lambda x:x[\"Timestamp\"])[-1][\"Average\"]:.0f}%' if d e
             --metric-name CPUCreditBalance \
             --dimensions Name=InstanceId,Value="$id" \
             --statistics Average \
-            --start-time "$(py "from datetime import datetime,timedelta; print((datetime.utcnow()-timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S'))")" \
-            --end-time "$(py "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")" \
+            --start-time "$start_10m" --end-time "$end_now" \
             --period 300 \
             --region "$AWS_REGION" \
             --output json 2>/dev/null | py "
@@ -332,17 +337,17 @@ show_tasks() {
         --output json 2>/dev/null | py "
 import json, sys
 tasks = json.load(sys.stdin)['tasks']
-print(f'  ${DIM}{\"TASK ID\":<14} {\"STATUS\":<12} {\"HEALTH\":<10} {\"REV\":<6} {\"STARTED\":<19} {\"AZ\":<16}${NC}')
+print(f'  ${DIM}{\"TASK ID\":<14} {\"STATUS\":<13} {\"HEALTH\":<10} {\"REV\":<6} {\"STARTED\":<19} {\"AZ\":<16}${NC}')
 for t in tasks:
     tid = t['taskArn'].split('/')[-1][:12]
     status = t['lastStatus']
     health = t.get('healthStatus', '-')
     rev = t['taskDefinitionArn'].split(':')[-1]
-    started = t.get('startedAt', '')[:19].replace('T', ' ') or '-'
+    started = str(t.get('startedAt', ''))[:19].replace('T', ' ') or '-'
     az = t.get('availabilityZone', '-')
     sc = '${GRN}' if status == 'RUNNING' else '${YLW}'
-    hc = '${GRN}' if health == 'HEALTHY' else ('${DIM}' if health == '-' else '${YLW}')
-    print(f'  {tid:<14} {sc}{status:<12}${NC} {hc}{health:<10}${NC} {rev:<6} {started:<19} {az}')
+    hc = '${GRN}' if health == 'HEALTHY' else ('${DIM}' if health == '-' or health == 'UNKNOWN' else '${YLW}')
+    print(f'  {tid:<14} {sc}{status:<13}${NC} {hc}{health:<10}${NC} {rev:<6} {started:<19} {az}')
 "
 }
 
@@ -352,9 +357,11 @@ for t in tasks:
 show_alb() {
     section "ALB Target Groups"
 
+    # 우리 프로젝트 prefix로 필터링 (다른 팀 TG 안 보이게)
+    local prefix="focus-tracking-platform"
     local tgs
     tgs=$(aws elbv2 describe-target-groups --region "$AWS_REGION" \
-        --query 'TargetGroups[].[TargetGroupName,TargetGroupArn,Port,Protocol]' \
+        --query "TargetGroups[?starts_with(TargetGroupName, \`${prefix}\`)].[TargetGroupName,TargetGroupArn,Port,Protocol]" \
         --output text 2>/dev/null)
 
     [[ -z "$tgs" ]] && { echo "  ${DIM}Target Group 없음${NC}"; return; }
@@ -376,7 +383,7 @@ total = len(d)
 healthy = sum(1 for t in d if t['TargetHealth']['State'] == 'healthy')
 
 if total == 0:
-    print(f'  ${DIM}{name} (port {port}): 비어있음${NC}')
+    print(f'  ${DIM}{name} ({proto}:{port}): 비어있음${NC}')
 else:
     color = '${GRN}' if healthy == total else '${RED}'
     print(f'  ${BLD}{name}${NC} ({proto}:{port})  {color}{healthy}/{total} healthy${NC}')
@@ -403,15 +410,15 @@ show_metrics() {
 
     local alb_arn
     alb_arn=$(aws elbv2 describe-load-balancers --region "$AWS_REGION" \
-        --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+        --query "LoadBalancers[?starts_with(LoadBalancerName, \`focus-tracking-platform\`)].LoadBalancerArn | [0]" \
+        --output text 2>/dev/null)
     local alb_suffix
     alb_suffix=$(echo "$alb_arn" | awk -F':' '{print $NF}' | sed 's|loadbalancer/||')
 
     local start end
-    start=$(py "from datetime import datetime,timedelta; print((datetime.utcnow()-timedelta(minutes=15)).strftime('%Y-%m-%dT%H:%M:%S'))")
-    end=$(py "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))")
+    start=$(py "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(minutes=15)).strftime('%Y-%m-%dT%H:%M:%S'))")
+    end=$(py "from datetime import datetime,timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'))")
 
-    # 메트릭 1개 가져와서 sparkline + avg + max 출력
     fetch_metric() {
         local namespace="$1" metric="$2" stat="$3" dims="$4" unit="$5" label="$6"
 
@@ -476,16 +483,19 @@ print(f'{json.dumps(values)}|{sum(values)/len(values):.1f}|{max(maxes):.1f}')
 show_alarms() {
     section "CloudWatch Alarms"
 
+    # 우리 프로젝트 prefix로 필터링 (자동 생성된 TargetTracking 알람 포함)
     aws cloudwatch describe-alarms \
         --region "$AWS_REGION" \
         --output json 2>/dev/null | py "
 import json, sys
 alarms = json.load(sys.stdin)['MetricAlarms']
+prefix = 'focus-tracking-platform'
+alarms = [a for a in alarms if prefix in a['AlarmName']]
+
 if not alarms:
     print('  ${DIM}알람 없음${NC}')
     sys.exit()
 
-# 상태별 그룹
 states = {'ALARM': [], 'OK': [], 'INSUFFICIENT_DATA': []}
 for a in alarms:
     states[a['StateValue']].append(a['AlarmName'])
@@ -526,12 +536,12 @@ show_recent_deploys() {
 import json, sys
 d = json.load(sys.stdin)['deploymentInfo']
 status = d['status']
-created = d['createTime'][:19].replace('T', ' ')
+created = str(d['createTime'])[:19].replace('T', ' ')
 duration = ''
 if d.get('completeTime'):
     from datetime import datetime
-    c = datetime.fromisoformat(d['createTime'].replace('Z', '+00:00'))
-    e = datetime.fromisoformat(d['completeTime'].replace('Z', '+00:00'))
+    c = datetime.fromisoformat(str(d['createTime']).replace('Z', '+00:00'))
+    e = datetime.fromisoformat(str(d['completeTime']).replace('Z', '+00:00'))
     secs = int((e-c).total_seconds())
     duration = f'{secs//60}m {secs%60}s'
 
