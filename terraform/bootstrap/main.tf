@@ -143,6 +143,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "ec2:*",
       "elasticloadbalancing:*",
       "autoscaling:*",
+      "application-autoscaling:*",
       "ecr:*",
       "ecs:*",
       "logs:*",
@@ -158,7 +159,6 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "codedeploy:*",
       "sns:*",
       "firehose:*"
-
     ]
 
     resources = ["*"]
