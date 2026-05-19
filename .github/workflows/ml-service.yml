@@ -35,6 +35,36 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Resolve ML EC2 instance
+        id: ml_instance
+        run: |
+          set -e
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --region "${{ env.AWS_REGION }}" \
+            --filters "Name=tag:Name,Values=ml-ec2" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)
+
+          read -r -a IDS <<< "$INSTANCE_IDS"
+          if [ "${#IDS[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one running EC2 instance tagged Name=ml-ec2, found ${#IDS[@]}: ${INSTANCE_IDS:-none}"
+            exit 1
+          fi
+
+          INSTANCE_ID="${IDS[0]}"
+          SSM_STATUS=$(aws ssm describe-instance-information \
+            --region "${{ env.AWS_REGION }}" \
+            --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+            --query 'InstanceInformationList[0].PingStatus' \
+            --output text)
+
+          if [ "$SSM_STATUS" != "Online" ]; then
+            echo "::error::EC2 instance $INSTANCE_ID is running but not online in SSM. Check SSM Agent, IAM instance profile, and private subnet egress/VPC endpoints."
+            exit 1
+          fi
+
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
       - name: Docker 빌드 + ECR 푸시 (네이티브 ARM64)
         id: build
         env:
@@ -56,12 +86,14 @@ jobs:
           COMPOSE_B64=$(base64 -w 0 ml-service/docker-compose.yml)
 
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ vars.ML_EC2_INSTANCE_ID }}" \
+            --instance-ids "${{ steps.ml_instance.outputs.instance_id }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy ML Service with Redis" \
             --parameters "commands=[
               \"set -e\",
               \"if ! command -v aws >/dev/null 2>&1; then apt-get update -y && apt-get install -y awscli; fi\",
+              \"if ! command -v docker >/dev/null 2>&1; then apt-get update -y && apt-get install -y ca-certificates curl && curl -fsSL https://get.docker.com | sh; fi\",
+              \"systemctl enable --now docker\",
               \"mkdir -p /opt/ml-service\",
               \"echo $COMPOSE_B64 | base64 -d > /opt/ml-service/docker-compose.yml\",
               \"echo ENVIRONMENT=dev > /opt/ml-service/.env\",
@@ -87,12 +119,12 @@ jobs:
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ vars.ML_EC2_INSTANCE_ID }}" \
+            --instance-id "${{ steps.ml_instance.outputs.instance_id }}" \
             --region "${{ env.AWS_REGION }}" || true
 
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ vars.ML_EC2_INSTANCE_ID }}" \
+            --instance-id "${{ steps.ml_instance.outputs.instance_id }}" \
             --region "${{ env.AWS_REGION }}" \
             --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
             --output json
