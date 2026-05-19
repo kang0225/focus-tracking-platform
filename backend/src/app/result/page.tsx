@@ -17,6 +17,8 @@ function ResultContent() {
     avgBpm?: number;
     focusRatio?: number;
     summary?: string;
+    feedback?: string;
+    feedbackSource?: string;
   } | null>(null);
   
   // URL에서 데이터 추출
@@ -32,6 +34,11 @@ function ResultContent() {
   const bpmStatusColor = avgBpm < 60 ? 'text-blue-400' : avgBpm > 100 ? 'text-red-400' : 'text-emerald-400';
   const sessionId = `${time}-${focusRatio}-${avgBpm}`;
   const isWaitingForJob = !!jobId && jobStatus !== 'completed' && jobStatus !== 'failed';
+  const feedbackSourceLabel = jobResult?.feedbackSource === 'bedrock'
+    ? 'LLM 피드백'
+    : jobResult?.feedbackSource === 'local_fallback'
+      ? '기본 분석 피드백'
+      : '학습 피드백';
 
   useEffect(() => {
     if (!jobId) return undefined;
@@ -280,6 +287,20 @@ function ResultContent() {
             </div>
           </div>
         </div>
+
+        {jobResult?.feedback && (
+          <div className="mt-6 rounded-2xl bg-emerald-900/20 p-8 ring-1 ring-emerald-500/20 backdrop-blur-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">AI 학습 코치 피드백</h2>
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/20">
+                {feedbackSourceLabel}
+              </span>
+            </div>
+            <p className="whitespace-pre-line leading-7 text-slate-200">
+              {jobResult.feedback}
+            </p>
+          </div>
+        )}
 
         {/* 권장사항 */}
         <div className="mt-6 rounded-2xl bg-blue-900/20 p-8 ring-1 ring-blue-500/20 backdrop-blur-sm">

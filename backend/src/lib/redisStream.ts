@@ -252,6 +252,8 @@ export interface TrackingAnalysisJobStatus {
     avgBpm?: number;
     focusRatio?: number;
     summary?: string;
+    feedback?: string;
+    feedbackSource?: string;
   };
   error?: string;
 }
