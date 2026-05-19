@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PairingData, PairingResponse } from '../../types/tracker';
 import WebcamView from '../../components/WebcamView';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
-import { useRPPG } from '../../hooks/useRPPG';
+import { isRppgMeasuringStatus, useRPPG } from '../../hooks/useRPPG';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useRollingHeartRateAverage } from '@/hooks/useRollingHeartRateAverage';
 
@@ -23,7 +23,8 @@ export default function TrackerPage() {
   const rawDisplayedHeartRate = isPaired && data?.appleWatchPaired ? data.heartRate : bpm;
   const heartRateAverageSource = isPaired && data?.appleWatchPaired ? 'Apple Watch' : 'FacePhys Camera';
   const displayedHeartRate = useRollingHeartRateAverage(rawDisplayedHeartRate, rawDisplayedHeartRate > 0, 10, heartRateAverageSource);
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || useRPPGMode);
+  const isRppgMeasuring = useRPPGMode && isRppgMeasuringStatus(rppgStatus);
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || isRppgMeasuring);
 
   const generateCode = async () => {
     setLoading(true);

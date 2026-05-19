@@ -122,9 +122,9 @@ export default function VideoRoomPage() {
     heartRateSource,
     heartRateStatus,
     focusScore,
+    focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
-    rPPG,
   } = useConcentrationData();
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
@@ -157,13 +157,20 @@ export default function VideoRoomPage() {
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: !!room?.roomId,
     data: {
-      sessionId: room?.roomId ?? '',
+      meetingId: room?.roomId ?? '',
       userId: clientId,
       heartRate,
+      heartRateSource,
+      heartRateStatus,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
-      rPPG,
-      threshold: focusThresholdRawScore,
+      rawGazeX: rawCoordinates.x,
+      rawGazeY: rawCoordinates.y,
+      isGazeCalibrated: isCalibrated,
+      focusScore: focusRawScore ?? undefined,
+      focusIsFocused,
+      focusThresholdRawScore,
+      page: 'room',
     },
   });
 

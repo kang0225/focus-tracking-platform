@@ -2,8 +2,7 @@ import net from 'node:net';
 
 const DEFAULT_REDIS_HOST = '10.0.11.0';
 const DEFAULT_REDIS_PORT = 6379;
-const DEFAULT_RECORD_TTL_SECONDS = 60 * 60 * 24;
-const DEFAULT_ML_SERVICE_URL = 'http://ml-service:8000';
+const DEFAULT_STREAM_MAXLEN = 10_800;
 
 interface RedisCommand {
   args: string[];
@@ -196,61 +195,40 @@ export async function sendRedisCommand(args: string[]) {
 }
 
 export interface TrackingStreamPayload {
-  timestamp: string;
+  meetingId: string;
   userId: string;
-  sessionId: string;
-  gazeX: number;
-  gazeY: number;
-  heartRate: number;
-  rPPG?: number | null;
-  threshold?: number | null;
-}
-
-export interface TrackingRecordPayload {
   timestamp: string;
-  userId: string;
-  sessionId: string;
-  gazeX: number;
-  gazeY: number;
   heartRate: number;
-  rPPG: number | null;
-  threshold: number | null;
-}
-
-function getTrackingRecordsKey(userId: string, sessionId: string) {
-  return `study:session:${userId}:${sessionId}:records`;
-}
-
-function toKstIsoString(value: string) {
-  const date = new Date(value);
-  const source = Number.isNaN(date.getTime()) ? new Date() : date;
-  const offsetMinutes = 9 * 60;
-  const shifted = new Date(source.getTime() + offsetMinutes * 60 * 1000);
-  return `${shifted.toISOString().slice(0, 19)}+09:00`;
-}
-
-function finiteNumber(value: unknown, fallback: number | null = null) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
+  heartRateSource: string;
+  heartRateStatus?: string;
+  gaze: {
+    x: number;
+    y: number;
+    rawX?: number;
+    rawY?: number;
+    calibrated: boolean;
+  };
+  focusScore?: number;
+  focusIsFocused?: boolean | null;
+  focusThresholdRawScore?: number | null;
+  page?: 'solo' | 'room';
 }
 
 export async function appendTrackingStream(payload: TrackingStreamPayload) {
-  const key = getTrackingRecordsKey(payload.userId, payload.sessionId);
-  const record: TrackingRecordPayload = {
-    timestamp: toKstIsoString(payload.timestamp),
-    userId: payload.userId,
-    sessionId: payload.sessionId,
-    gazeX: payload.gazeX,
-    gazeY: payload.gazeY,
-    heartRate: payload.heartRate,
-    rPPG: finiteNumber(payload.rPPG),
-    threshold: finiteNumber(payload.threshold),
-  };
+  const jsonData = JSON.stringify(payload);
+  const key = `tracking:${payload.meetingId}:${payload.userId}:stream`;
+  const id = await sendRedisCommand([
+    'XADD',
+    key,
+    'MAXLEN',
+    '~',
+    String(Number(process.env.REDIS_STREAM_MAXLEN ?? DEFAULT_STREAM_MAXLEN) || DEFAULT_STREAM_MAXLEN),
+    '*',
+    'data',
+    jsonData,
+  ]);
 
-  const length = await sendRedisCommand(['RPUSH', key, JSON.stringify(record)]);
-  await sendRedisCommand(['EXPIRE', key, String(DEFAULT_RECORD_TTL_SECONDS)]);
-
-  return { key, length };
+  return { key, id };
 }
 
 export interface TrackingAnalysisJobRequest {
@@ -278,18 +256,6 @@ export interface TrackingAnalysisJobStatus {
   error?: string;
 }
 
-interface MlAnalyzeResponse {
-  duration_minutes?: number;
-  summary?: string | {
-    high_focus_minutes?: number;
-    [key: string]: unknown;
-  };
-  minutes?: Array<{
-    heartRate_mean?: number | null;
-    [key: string]: unknown;
-  }>;
-}
-
 function makeJobId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -297,8 +263,6 @@ function makeJobId() {
 
 export async function createTrackingAnalysisJob(request: TrackingAnalysisJobRequest) {
   const jobId = makeJobId();
-  const statusKey = `tracking:job:${jobId}:status`;
-  const trackingRecordsKey = getTrackingRecordsKey(request.userId, request.meetingId);
   const status: TrackingAnalysisJobStatus = {
     jobId,
     meetingId: request.meetingId,
@@ -308,6 +272,12 @@ export async function createTrackingAnalysisJob(request: TrackingAnalysisJobRequ
     status: 'queued',
     requestedAt: request.requestedAt,
   };
+  const trackingStreamKey = `tracking:${request.meetingId}:${request.userId}:stream`;
+  const statusKey = `tracking:job:${jobId}:status`;
+  const jobPayload = JSON.stringify({
+    ...status,
+    trackingStreamKey,
+  });
 
   await sendRedisCommand([
     'SET',
@@ -317,96 +287,21 @@ export async function createTrackingAnalysisJob(request: TrackingAnalysisJobRequ
     String(60 * 60 * 24),
   ]);
 
-  const processingStatus: TrackingAnalysisJobStatus = {
-    ...status,
-    status: 'processing',
-  };
-  await setTrackingAnalysisJobStatus(statusKey, processingStatus);
-
-  try {
-    const recordCount = await sendRedisCommand(['LLEN', trackingRecordsKey]);
-    if (typeof recordCount !== 'number' || recordCount <= 0) {
-      throw new Error('분석할 tracking 데이터가 Redis에 없습니다.');
-    }
-
-    const mlServiceUrl = (process.env.ML_SERVICE_URL || DEFAULT_ML_SERVICE_URL).replace(/\/$/, '');
-    const response = await fetch(`${mlServiceUrl}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: request.userId,
-        sessionId: request.meetingId,
-        delete_after: false,
-      }),
-    });
-
-    const payload = await response.json().catch(() => null) as MlAnalyzeResponse | { detail?: string; error?: string } | null;
-    if (!response.ok) {
-      const message = payload && 'detail' in payload
-        ? payload.detail
-        : payload && 'error' in payload
-          ? payload.error
-          : 'ML 분석 요청에 실패했습니다.';
-      throw new Error(message);
-    }
-
-    const completedStatus: TrackingAnalysisJobStatus = {
-      ...processingStatus,
-      status: 'completed',
-      result: mapMlAnalyzeResult(payload as MlAnalyzeResponse),
-    };
-    await setTrackingAnalysisJobStatus(statusKey, completedStatus);
-  } catch (error) {
-    const failedStatus: TrackingAnalysisJobStatus = {
-      ...processingStatus,
-      status: 'failed',
-      error: error instanceof Error ? error.message : 'ML 분석 요청에 실패했습니다.',
-    };
-    await setTrackingAnalysisJobStatus(statusKey, failedStatus);
-  }
+  await sendRedisCommand([
+    'XADD',
+    process.env.REDIS_ANALYSIS_JOBS_STREAM || 'tracking:analysis:jobs',
+    'MAXLEN',
+    '~',
+    String(Number(process.env.REDIS_ANALYSIS_JOBS_MAXLEN ?? DEFAULT_STREAM_MAXLEN) || DEFAULT_STREAM_MAXLEN),
+    '*',
+    'data',
+    jobPayload,
+  ]);
 
   return {
     jobId,
     statusKey,
-    trackingRecordsKey,
-  };
-}
-
-async function setTrackingAnalysisJobStatus(statusKey: string, status: TrackingAnalysisJobStatus) {
-  await sendRedisCommand([
-    'SET',
-    statusKey,
-    JSON.stringify(status),
-    'EX',
-    String(60 * 60 * 24),
-  ]);
-}
-
-function mapMlAnalyzeResult(payload: MlAnalyzeResponse | null): NonNullable<TrackingAnalysisJobStatus['result']> {
-  const durationMinutes = Math.max(0, finiteNumber(payload?.duration_minutes, 0) ?? 0);
-  const heartRates = (payload?.minutes ?? [])
-    .map((minute) => finiteNumber(minute.heartRate_mean))
-    .filter((value): value is number => value != null && value > 0);
-  const avgBpm = heartRates.length > 0
-    ? Math.round(heartRates.reduce((sum, value) => sum + value, 0) / heartRates.length)
-    : 0;
-  const highFocusMinutes = typeof payload?.summary === 'object'
-    ? finiteNumber(payload.summary.high_focus_minutes, 0) ?? 0
-    : 0;
-  const focusRatio = durationMinutes > 0
-    ? Math.max(0, Math.min(100, Math.round((highFocusMinutes / durationMinutes) * 100)))
-    : 0;
-  const summary = typeof payload?.summary === 'string'
-    ? payload.summary
-    : payload?.summary
-      ? JSON.stringify(payload.summary)
-      : undefined;
-
-  return {
-    durationSeconds: Math.round(durationMinutes * 60),
-    avgBpm,
-    focusRatio,
-    summary,
+    trackingStreamKey,
   };
 }
 

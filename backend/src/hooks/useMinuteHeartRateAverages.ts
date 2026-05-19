@@ -39,7 +39,10 @@ export function useMinuteHeartRateAverages(heartRate: number, enabled = true) {
   }, [heartRate]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) {
+      setBuckets([]);
+      return undefined;
+    }
 
     const sample = () => {
       const value = Number(latestHeartRateRef.current);
