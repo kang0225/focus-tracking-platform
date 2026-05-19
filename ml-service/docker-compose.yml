@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: focus-tracking-ml-service:latest
+    image: ${ML_SERVICE_IMAGE:-focus-tracking-ml-service:latest}
     container_name: ml-service
     restart: unless-stopped
     ports:

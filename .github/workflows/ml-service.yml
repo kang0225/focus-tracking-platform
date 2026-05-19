@@ -108,7 +108,7 @@ jobs:
               \"cd /opt/ml-service\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.registry }}\",
               \"docker pull ${{ steps.build.outputs.image }}\",
-              \"ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d\",
+              \"ML_SERVICE_IMAGE=${{ steps.build.outputs.image }} docker compose -f docker-compose.yml up -d --no-build\",
               \"docker image prune -f\"
             ]" \
             --region "${{ env.AWS_REGION }}" \
@@ -117,10 +117,24 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ steps.ml_instance.outputs.instance_id }}" \
-            --region "${{ env.AWS_REGION }}" || true
+          STATUS="Pending"
+          for attempt in {1..90}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ steps.ml_instance.outputs.instance_id }}" \
+              --region "${{ env.AWS_REGION }}" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo "Pending")
+
+            echo "SSM command status: $STATUS ($attempt/90)"
+            case "$STATUS" in
+              Success|Cancelled|Cancelling|TimedOut|Failed)
+                break
+                ;;
+            esac
+
+            sleep 10
+          done
 
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
@@ -128,3 +142,8 @@ jobs:
             --region "${{ env.AWS_REGION }}" \
             --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
             --output json
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "::error::SSM command did not complete successfully. Final status: $STATUS"
+            exit 1
+          fi
