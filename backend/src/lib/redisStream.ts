@@ -196,25 +196,14 @@ export async function sendRedisCommand(args: string[]) {
 }
 
 export interface TrackingStreamPayload {
-  meetingId: string;
-  userId: string;
   timestamp: string;
+  userId: string;
+  sessionId: string;
+  gazeX: number;
+  gazeY: number;
   heartRate: number;
-  heartRateSource: string;
-  heartRateStatus?: string;
-  gaze: {
-    x: number;
-    y: number;
-    rawX?: number;
-    rawY?: number;
-    calibrated: boolean;
-  };
-  focusScore?: number;
-  focusIsFocused?: boolean | null;
-  focusThresholdRawScore?: number | null;
   rPPG?: number | null;
   threshold?: number | null;
-  page?: 'solo' | 'room';
 }
 
 export interface TrackingRecordPayload {
@@ -246,17 +235,16 @@ function finiteNumber(value: unknown, fallback: number | null = null) {
 }
 
 export async function appendTrackingStream(payload: TrackingStreamPayload) {
-  const sessionId = payload.meetingId;
-  const key = getTrackingRecordsKey(payload.userId, sessionId);
+  const key = getTrackingRecordsKey(payload.userId, payload.sessionId);
   const record: TrackingRecordPayload = {
     timestamp: toKstIsoString(payload.timestamp),
     userId: payload.userId,
-    sessionId,
-    gazeX: payload.gaze.x,
-    gazeY: payload.gaze.y,
+    sessionId: payload.sessionId,
+    gazeX: payload.gazeX,
+    gazeY: payload.gazeY,
     heartRate: payload.heartRate,
     rPPG: finiteNumber(payload.rPPG),
-    threshold: finiteNumber(payload.threshold ?? payload.focusThresholdRawScore),
+    threshold: finiteNumber(payload.threshold),
   };
 
   const length = await sendRedisCommand(['RPUSH', key, JSON.stringify(record)]);

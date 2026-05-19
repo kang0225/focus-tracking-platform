@@ -3,22 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface TrackingStreamData {
-  meetingId: string;
+  sessionId: string;
   userId: string;
   heartRate: number;
-  heartRateSource: string;
-  heartRateStatus?: string;
   gazeX: number;
   gazeY: number;
-  rawGazeX?: number;
-  rawGazeY?: number;
-  isGazeCalibrated: boolean;
-  focusScore?: number;
-  focusIsFocused?: boolean | null;
-  focusThresholdRawScore?: number | null;
   rPPG?: number | null;
   threshold?: number | null;
-  page: 'solo' | 'room';
 }
 
 interface UseTrackingStreamPublisherOptions {
@@ -49,8 +40,8 @@ export function useTrackingStreamPublisher({ enabled = true, data }: UseTracking
   }, []);
 
   const canPublish = useMemo(() => (
-    enabled && data.meetingId.length > 0 && data.userId.length > 0
-  ), [data.meetingId.length, data.userId.length, enabled]);
+    enabled && data.sessionId.length > 0 && data.userId.length > 0
+  ), [data.sessionId.length, data.userId.length, enabled]);
 
   useEffect(() => {
     if (!canPublish || stoppedRef.current) return undefined;
@@ -66,25 +57,14 @@ export function useTrackingStreamPublisher({ enabled = true, data }: UseTracking
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            meetingId: latest.meetingId,
+            timestamp: toKstIsoString(new Date()),
             userId: latest.userId,
-            timestamp: new Date().toISOString(),
+            sessionId: latest.sessionId,
+            gazeX: latest.gazeX,
+            gazeY: latest.gazeY,
             heartRate: latest.heartRate,
-            heartRateSource: latest.heartRateSource,
-            heartRateStatus: latest.heartRateStatus,
-            gaze: {
-              x: latest.gazeX,
-              y: latest.gazeY,
-              rawX: latest.rawGazeX,
-              rawY: latest.rawGazeY,
-              calibrated: latest.isGazeCalibrated,
-            },
-            focusScore: latest.focusScore,
-            focusIsFocused: latest.focusIsFocused,
-            focusThresholdRawScore: latest.focusThresholdRawScore,
-            rPPG: latest.rPPG,
-            threshold: latest.threshold,
-            page: latest.page,
+            rPPG: finiteNumberOrNull(latest.rPPG),
+            threshold: finiteNumberOrNull(latest.threshold),
           }),
           keepalive: true,
         });
@@ -108,4 +88,15 @@ export function useTrackingStreamPublisher({ enabled = true, data }: UseTracking
   return {
     stopPublishing,
   };
+}
+
+function toKstIsoString(date: Date) {
+  const offsetMinutes = 9 * 60;
+  const shifted = new Date(date.getTime() + offsetMinutes * 60 * 1000);
+  return `${shifted.toISOString().slice(0, 19)}+09:00`;
+}
+
+function finiteNumberOrNull(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }

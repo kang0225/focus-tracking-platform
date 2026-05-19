@@ -53,22 +53,13 @@ export default function HomePage() {
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: isLoaded,
     data: {
-      meetingId: soloMeetingId,
+      sessionId: soloMeetingId,
       userId: soloUserId,
       heartRate,
-      heartRateSource,
-      heartRateStatus,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
-      rawGazeX: rawCoordinates.x,
-      rawGazeY: rawCoordinates.y,
-      isGazeCalibrated: isCalibrated,
-      focusScore: focusRawScore ?? undefined,
-      focusIsFocused,
-      focusThresholdRawScore,
       rPPG,
       threshold: focusThresholdRawScore,
-      page: 'solo',
     },
   });
 

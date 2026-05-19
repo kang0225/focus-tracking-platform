@@ -8,25 +8,19 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
   if (!value || typeof value !== 'object') return false;
 
   const payload = value as Partial<TrackingStreamPayload>;
-  const hasValidRppg = payload.rPPG == null || typeof payload.rPPG === 'number';
-  const hasValidThreshold = payload.threshold == null || typeof payload.threshold === 'number';
-  const hasValidFocusThresholdRawScore = payload.focusThresholdRawScore == null
-    || typeof payload.focusThresholdRawScore === 'number';
+  const hasValidRppg = payload.rPPG == null || Number.isFinite(payload.rPPG);
+  const hasValidThreshold = payload.threshold == null || Number.isFinite(payload.threshold);
 
-  return typeof payload.meetingId === 'string'
-    && payload.meetingId.length > 0
+  return typeof payload.timestamp === 'string'
     && typeof payload.userId === 'string'
     && payload.userId.length > 0
-    && typeof payload.timestamp === 'string'
-    && typeof payload.heartRate === 'number'
-    && typeof payload.heartRateSource === 'string'
-    && !!payload.gaze
-    && typeof payload.gaze.x === 'number'
-    && typeof payload.gaze.y === 'number'
-    && typeof payload.gaze.calibrated === 'boolean'
+    && typeof payload.sessionId === 'string'
+    && payload.sessionId.length > 0
+    && Number.isFinite(payload.gazeX)
+    && Number.isFinite(payload.gazeY)
+    && Number.isFinite(payload.heartRate)
     && hasValidRppg
-    && hasValidThreshold
-    && hasValidFocusThresholdRawScore;
+    && hasValidThreshold;
 }
 
 export async function POST(request: Request) {

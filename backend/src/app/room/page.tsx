@@ -157,22 +157,13 @@ export default function VideoRoomPage() {
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: !!room?.roomId,
     data: {
-      meetingId: room?.roomId ?? '',
+      sessionId: room?.roomId ?? '',
       userId: clientId,
       heartRate,
-      heartRateSource,
-      heartRateStatus,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
-      rawGazeX: rawCoordinates.x,
-      rawGazeY: rawCoordinates.y,
-      isGazeCalibrated: isCalibrated,
-      focusScore,
-      focusIsFocused,
-      focusThresholdRawScore,
       rPPG,
       threshold: focusThresholdRawScore,
-      page: 'room',
     },
   });
 
