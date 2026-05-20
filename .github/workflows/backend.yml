@@ -79,6 +79,9 @@ jobs:
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
             GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}
             APP_URL=${{ secrets.APP_URL }}
+            REDIS_HOST=${{ secrets.REDIS_HOST }}
+            REDIS_PORT=${{ secrets.REDIS_PORT }}
+            ML_SERVICE_URL=${{ secrets.ML_SERVICE_URL }}
 
       - name: Deploy to ECS (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

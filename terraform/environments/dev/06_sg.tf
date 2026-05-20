@@ -58,6 +58,7 @@ resource "aws_security_group_rule" "alb_ingress_http" {
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.alb_sg.id
+  description       = "Allow HTTP from internet for ALB"
 }
 
 resource "aws_security_group_rule" "alb_ingress_https" {
@@ -67,6 +68,7 @@ resource "aws_security_group_rule" "alb_ingress_https" {
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.alb_sg.id
+  description       = "Allow HTTPS from internet for ALB"
 }
 
 resource "aws_security_group_rule" "alb_egress_to_web" {
@@ -76,6 +78,7 @@ resource "aws_security_group_rule" "alb_egress_to_web" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.alb_sg.id
+  description              = "Allow ALB to forward traffic to web EC2 on port 3000"
 }
 
 # 2. Web EC2 Rules
@@ -86,6 +89,7 @@ resource "aws_security_group_rule" "web_ingress_from_alb" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb_sg.id
   security_group_id        = aws_security_group.web_sg.id
+  description              = "Allow inbound traffic from ALB on port 3000"
 }
 
 resource "aws_security_group_rule" "web_ingress_from_ml" {
@@ -95,6 +99,7 @@ resource "aws_security_group_rule" "web_ingress_from_ml" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.ml_sg.id
   security_group_id        = aws_security_group.web_sg.id
+  description              = "Allow inbound traffic from ML service on port 3000"
 }
 
 resource "aws_security_group_rule" "web_egress_all" {
@@ -104,6 +109,7 @@ resource "aws_security_group_rule" "web_egress_all" {
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.web_sg.id
+  description       = "Allow all outbound traffic from web EC2 (NAT/internet access)"
 }
 
 # 3. Data EC2 Rules
@@ -114,6 +120,7 @@ resource "aws_security_group_rule" "data_ingress_from_web" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.db_sg.id
+  description              = "Allow MySQL access from web EC2"
 }
 
 resource "aws_security_group_rule" "data_egress_all" {
@@ -123,6 +130,7 @@ resource "aws_security_group_rule" "data_egress_all" {
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.db_sg.id
+  description       = "Allow all outbound traffic from DB EC2 (updates, patches)"
 }
 
 # 4. ML EC2 Rules
@@ -133,6 +141,7 @@ resource "aws_security_group_rule" "ml_ingress_from_web" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.ml_sg.id
+  description              = "Allow inbound from web EC2 to ML service on port 8000"
 }
 
 resource "aws_security_group_rule" "redis_ingress_from_web" {
@@ -142,6 +151,7 @@ resource "aws_security_group_rule" "redis_ingress_from_web" {
   to_port                  = 6379
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
+  description              = "Allow inbound from web EC2 to Redis on port 6379"
 }
 
 resource "aws_security_group_rule" "ml_egress_all" {
@@ -151,4 +161,5 @@ resource "aws_security_group_rule" "ml_egress_all" {
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.ml_sg.id
+  description       = "Allow all outbound traffic from ML EC2 (ECR/Bedrock/NAT)"
 }

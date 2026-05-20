@@ -50,8 +50,11 @@ resource "aws_ecs_task_definition" "app" {
   requires_compatibilities = ["EC2"]
 
   # 컨테이너에 할당할 자원
-  cpu    = "512"    # 0.5 vCPU
-  memory = "1024"   # 1 GB
+  # cpu=1024: 1 EC2(2 vCPU)에 Task 2개 적재 시 CPU 100% 활용
+  # memory=1536: Task 2개 합 3072 MB, t4g.medium 가용 ~3700 MB 중 헤드룸 ~630 MB 확보
+  # Task 1개 단독 실행 시엔 cpu가 소프트 리밋이라 burst로 2 vCPU까지 활용 가능
+  cpu    = "1024"   # 1 vCPU
+  memory = "1536"   # 1.5 GB
 
   # 컨테이너 실행 역할: ECR에서 이미지 pull + CloudWatch 로그 전송에 사용
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
@@ -115,8 +118,15 @@ resource "aws_ecs_service" "app" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
 
-  desired_count   = 1          # 평상시 1개 유지 (t4g.medium + awsvpc ENI 제약)
-  launch_type     = "EC2"      # EC2 위에서 돌림 (Fargate 아님)
+  desired_count   = 1          # 평상시 1개 유지 (Auto Scaling으로 부하 시 2개까지 확장)
+
+  # ★ launch_type 대신 Capacity Provider 사용 (24_capacity_provider.tf 참조)
+  # 이 전략을 통해 ECS가 ASG에 "EC2 더 필요해" 신호를 보낼 수 있게 됨
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.app.name
+    weight            = 100   # 100% 이 Provider로 배치
+    base              = 1     # 최소 1개 Task는 무조건 이 Provider에
+  }
 
   # ★ Blue/Green 배포 하려면 반드시 CODE_DEPLOY로 설정
   deployment_controller {
@@ -144,14 +154,24 @@ resource "aws_ecs_service" "app" {
     container_port   = var.app_port
   }
 
-  # CodeDeploy가 배포 중에 task_definition과 load_balancer를 바꿈
-  # Terraform이 되돌리지 않도록 변경 무시 설정
+  # CodeDeploy가 배포 중에 task_definition, load_balancer, capacity_provider_strategy를 바꿈
+  # Auto Scaling이 desired_count를 바꿈
+  # Terraform이 되돌리지 않도록 모두 무시
   lifecycle {
-    ignore_changes = [task_definition, load_balancer, desired_count]
+    ignore_changes = [
+      task_definition,
+      load_balancer,
+      desired_count,
+      capacity_provider_strategy,
+    ]
   }
 
   # ALB 리스너 먼저 생성돼야 서비스 등록 가능
-  depends_on = [aws_lb_listener.prod_https]
+  # Capacity Provider도 클러스터에 등록된 후에 Service가 참조할 수 있음
+  depends_on = [
+    aws_lb_listener.prod_https,
+    aws_ecs_cluster_capacity_providers.app,
+  ]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-svc"
