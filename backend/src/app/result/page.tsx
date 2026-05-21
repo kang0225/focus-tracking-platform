@@ -1,10 +1,272 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { StudySessionRecord } from '@/types/dashboard';
 
 const STORAGE_KEY = 'focusTracker.sessions';
+
+interface GazeHeatmapCell {
+  column: number;
+  row: number;
+  x: number;
+  y: number;
+  count: number;
+  intensity: number;
+}
+
+interface GazeHeatmap {
+  columns: number;
+  rows: number;
+  totalPoints: number;
+  xMin?: number;
+  xMax?: number;
+  yMin?: number;
+  yMax?: number;
+  cells: GazeHeatmapCell[];
+}
+
+interface FocusTimelinePoint {
+  minuteIndex: number;
+  elapsedSeconds: number;
+  focusScore?: number;
+  threshold?: number;
+  focusState: string;
+  focusTrend: string;
+}
+
+interface JobResult {
+  durationSeconds?: number;
+  avgBpm?: number;
+  focusRatio?: number;
+  summary?: string;
+  feedback?: string;
+  feedbackSource?: string;
+  gazeHeatmap?: GazeHeatmap;
+  focusTimeline?: FocusTimelinePoint[];
+}
+
+function formatNumber(value?: number) {
+  if (typeof value !== 'number') return '--';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatElapsed(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes}분` : `${minutes}분 ${rest}초`;
+}
+
+function GazeHeatmapChart({ heatmap }: { heatmap?: GazeHeatmap }) {
+  const cells = heatmap?.cells ?? [];
+
+  return (
+    <div className="rounded-2xl bg-slate-900/70 p-8 ring-1 ring-slate-600/50 backdrop-blur-sm">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">시선 분포 히트맵</h2>
+          <p className="mt-1 text-sm text-slate-400">gazeX와 gazeY가 머문 위치 분포</p>
+        </div>
+        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200 ring-1 ring-cyan-400/20">
+          {heatmap?.totalPoints ?? 0} samples
+        </span>
+      </div>
+
+      <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+        <div
+          className="absolute inset-0 opacity-40"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px)',
+            backgroundSize: '10% 10%',
+          }}
+        />
+        {cells.length > 0 ? (
+          cells.map((cell) => {
+            const size = 18 + cell.intensity * 58;
+            const opacity = 0.25 + cell.intensity * 0.65;
+            const color = cell.intensity > 0.66
+              ? 'rgba(248, 113, 113, 0.88)'
+              : cell.intensity > 0.33
+                ? 'rgba(34, 211, 238, 0.8)'
+                : 'rgba(59, 130, 246, 0.72)';
+
+            return (
+              <div
+                key={`${cell.column}-${cell.row}`}
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-md"
+                title={`${cell.count} samples`}
+                style={{
+                  left: `${cell.x}%`,
+                  top: `${cell.y}%`,
+                  width: size,
+                  height: size,
+                  opacity,
+                  background: color,
+                }}
+              />
+            );
+          })
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+            유효한 시선 좌표가 없습니다.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-3 text-xs text-slate-400 sm:grid-cols-2">
+        <div className="rounded-lg bg-slate-800/50 px-3 py-2">
+          X 범위 {formatNumber(heatmap?.xMin)} - {formatNumber(heatmap?.xMax)}
+        </div>
+        <div className="rounded-lg bg-slate-800/50 px-3 py-2">
+          Y 범위 {formatNumber(heatmap?.yMin)} - {formatNumber(heatmap?.yMax)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FocusTimelineChart({ timeline }: { timeline?: FocusTimelinePoint[] }) {
+  const chart = useMemo(() => {
+    const points = (timeline ?? []).filter((point) => typeof point.focusScore === 'number');
+    if (points.length === 0) return null;
+
+    const width = 680;
+    const height = 260;
+    const padding = { top: 24, right: 18, bottom: 38, left: 48 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const scoreValues = points.map((point) => point.focusScore as number);
+    const thresholdValues = points
+      .map((point) => point.threshold)
+      .filter((value): value is number => typeof value === 'number');
+    const values = [...scoreValues, ...thresholdValues];
+    const rawMin = Math.min(...values);
+    const rawMax = Math.max(...values);
+    const paddingValue = Math.max((rawMax - rawMin) * 0.18, 1);
+    const yMin = rawMin - paddingValue;
+    const yMax = rawMax + paddingValue;
+    const elapsedValues = points.map((point) => point.elapsedSeconds);
+    const xMin = Math.min(...elapsedValues);
+    const xMax = Math.max(...elapsedValues);
+    const xSpan = Math.max(xMax - xMin, 1);
+    const ySpan = Math.max(yMax - yMin, 1);
+    const xFor = (elapsedSeconds: number) => padding.left + ((elapsedSeconds - xMin) / xSpan) * chartWidth;
+    const yFor = (score: number) => padding.top + (1 - ((score - yMin) / ySpan)) * chartHeight;
+    const line = points
+      .map((point, index) => {
+        const command = index === 0 ? 'M' : 'L';
+        return `${command} ${xFor(point.elapsedSeconds).toFixed(2)} ${yFor(point.focusScore as number).toFixed(2)}`;
+      })
+      .join(' ');
+    const baseline = padding.top + chartHeight;
+    const area = `${line} L ${xFor(points[points.length - 1].elapsedSeconds).toFixed(2)} ${baseline} L ${xFor(points[0].elapsedSeconds).toFixed(2)} ${baseline} Z`;
+    const thresholdLine = thresholdValues.length > 0
+      ? points
+        .filter((point) => typeof point.threshold === 'number')
+        .map((point, index) => {
+          const command = index === 0 ? 'M' : 'L';
+          return `${command} ${xFor(point.elapsedSeconds).toFixed(2)} ${yFor(point.threshold as number).toFixed(2)}`;
+        })
+        .join(' ')
+      : null;
+
+    return {
+      area,
+      height,
+      line,
+      padding,
+      points,
+      thresholdLine,
+      width,
+      xEndLabel: formatElapsed(xMax),
+      xStartLabel: formatElapsed(xMin),
+      xFor,
+      yFor,
+      yMax,
+      yMin,
+    };
+  }, [timeline]);
+
+  return (
+    <div className="rounded-2xl bg-slate-900/70 p-8 ring-1 ring-slate-600/50 backdrop-blur-sm">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">집중도 흐름</h2>
+          <p className="mt-1 text-sm text-slate-400">시간 경과에 따른 분 단위 집중도 점수</p>
+        </div>
+        <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-200 ring-1 ring-blue-400/20">
+          {timeline?.length ?? 0} minutes
+        </span>
+      </div>
+
+      {chart ? (
+        <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950 px-2 py-4">
+          <svg viewBox={`0 0 ${chart.width} ${chart.height}`} className="h-auto w-full" role="img" aria-label="시간 경과에 따른 집중도 꺾은선 그래프">
+            {[0, 1, 2, 3].map((index) => {
+              const y = chart.padding.top + ((chart.height - chart.padding.top - chart.padding.bottom) / 3) * index;
+              return (
+                <line
+                  key={index}
+                  x1={chart.padding.left}
+                  x2={chart.width - chart.padding.right}
+                  y1={y}
+                  y2={y}
+                  stroke="rgba(148, 163, 184, 0.16)"
+                  strokeWidth="1"
+                />
+              );
+            })}
+            <path d={chart.area} fill="rgba(34, 211, 238, 0.12)" />
+            {chart.thresholdLine && (
+              <path
+                d={chart.thresholdLine}
+                fill="none"
+                stroke="rgba(248, 113, 113, 0.75)"
+                strokeDasharray="7 7"
+                strokeLinecap="round"
+                strokeWidth="2"
+              />
+            )}
+            <path
+              d={chart.line}
+              fill="none"
+              stroke="rgb(34, 211, 238)"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="4"
+            />
+            {chart.points.map((point) => (
+              <circle
+                key={`${point.minuteIndex}-${point.elapsedSeconds}`}
+                cx={chart.xFor(point.elapsedSeconds)}
+                cy={chart.yFor(point.focusScore as number)}
+                fill={point.focusState === 'high_focus' ? 'rgb(52, 211, 153)' : 'rgb(96, 165, 250)'}
+                r="4.5"
+              />
+            ))}
+            <text x="8" y={chart.padding.top + 4} fill="rgb(148, 163, 184)" fontSize="13">
+              {formatNumber(chart.yMax)}
+            </text>
+            <text x="8" y={chart.height - chart.padding.bottom} fill="rgb(148, 163, 184)" fontSize="13">
+              {formatNumber(chart.yMin)}
+            </text>
+            <text x={chart.padding.left} y={chart.height - 10} fill="rgb(148, 163, 184)" fontSize="13">
+              {chart.xStartLabel}
+            </text>
+            <text x={chart.width - chart.padding.right} y={chart.height - 10} fill="rgb(148, 163, 184)" fontSize="13" textAnchor="end">
+              {chart.xEndLabel}
+            </text>
+          </svg>
+        </div>
+      ) : (
+        <div className="flex aspect-[16/10] items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sm text-slate-500">
+          집중도 타임라인 데이터가 없습니다.
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ResultContent() {
   const router = useRouter();
@@ -12,14 +274,7 @@ function ResultContent() {
   const jobId = searchParams.get('jobId');
   const [jobStatus, setJobStatus] = useState<'queued' | 'processing' | 'completed' | 'failed' | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
-  const [jobResult, setJobResult] = useState<{
-    durationSeconds?: number;
-    avgBpm?: number;
-    focusRatio?: number;
-    summary?: string;
-    feedback?: string;
-    feedbackSource?: string;
-  } | null>(null);
+  const [jobResult, setJobResult] = useState<JobResult | null>(null);
   
   // URL에서 데이터 추출
   const avgBpm = jobResult?.avgBpm ?? parseInt(searchParams.get('avgBpm') || '0');
@@ -49,7 +304,7 @@ function ResultContent() {
         const response = await fetch(`/api/tracking/jobs/${encodeURIComponent(jobId)}`);
         const payload = await response.json().catch(() => null) as {
           status?: 'queued' | 'processing' | 'completed' | 'failed';
-          result?: typeof jobResult;
+          result?: JobResult;
           error?: string;
         } | null;
 
@@ -205,6 +460,11 @@ function ResultContent() {
           </div>
         </div>
 
+        <div className="mb-12 grid gap-6 lg:grid-cols-2">
+          <GazeHeatmapChart heatmap={jobResult?.gazeHeatmap} />
+          <FocusTimelineChart timeline={jobResult?.focusTimeline} />
+        </div>
+
         {/* 상세 분석 영역 */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* 집중도 분석 */}
@@ -301,38 +561,6 @@ function ResultContent() {
             </p>
           </div>
         )}
-
-        {/* 권장사항 */}
-        <div className="mt-6 rounded-2xl bg-blue-900/20 p-8 ring-1 ring-blue-500/20 backdrop-blur-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-            <span>💡</span>
-            <span>학습 개선 팁</span>
-          </h2>
-          <ul className="space-y-3 text-slate-300">
-            {focusRatio < 70 && (
-              <li className="flex gap-3">
-                <span className="text-blue-400">•</span>
-                <span>산만함이 감지되었습니다. 주변 환경을 정리하고, 집중에 방해되는 요소를 제거해보세요.</span>
-              </li>
-            )}
-            {avgBpm > 100 && (
-              <li className="flex gap-3">
-                <span className="text-red-400">•</span>
-                <span>심박수가 높습니다. 깊은 호흡을 하고, 5-10분 휴식을 취해보세요.</span>
-              </li>
-            )}
-            {avgBpm < 60 && (
-              <li className="flex gap-3">
-                <span className="text-cyan-400">•</span>
-                <span>매우 차분한 상태입니다. 에너지 레벨을 높이기 위해 스트레칭을 해보세요.</span>
-              </li>
-            )}
-            <li className="flex gap-3">
-              <span className="text-emerald-400">•</span>
-              <span>규칙적인 학습 세션으로 최적의 습관을 만들어보세요.</span>
-            </li>
-          </ul>
-        </div>
 
         {/* 버튼 */}
         <div className="mt-8 flex gap-4 justify-end">

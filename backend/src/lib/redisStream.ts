@@ -239,6 +239,35 @@ export interface TrackingAnalysisJobRequest {
   requestedAt: string;
 }
 
+export interface GazeHeatmapCell {
+  column: number;
+  row: number;
+  x: number;
+  y: number;
+  count: number;
+  intensity: number;
+}
+
+export interface GazeHeatmap {
+  columns: number;
+  rows: number;
+  totalPoints: number;
+  xMin?: number;
+  xMax?: number;
+  yMin?: number;
+  yMax?: number;
+  cells: GazeHeatmapCell[];
+}
+
+export interface FocusTimelinePoint {
+  minuteIndex: number;
+  elapsedSeconds: number;
+  focusScore?: number;
+  threshold?: number;
+  focusState: string;
+  focusTrend: string;
+}
+
 export interface TrackingAnalysisJobStatus {
   jobId: string;
   meetingId: string;
@@ -254,6 +283,8 @@ export interface TrackingAnalysisJobStatus {
     summary?: string;
     feedback?: string;
     feedbackSource?: string;
+    gazeHeatmap?: GazeHeatmap;
+    focusTimeline?: FocusTimelinePoint[];
   };
   error?: string;
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 import redis.asyncio as redis
@@ -228,6 +229,109 @@ def _round_float(value: Any, digits: int = 4) -> Any:
     return value
 
 
+def _finite_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    return number if math.isfinite(number) else None
+
+
+def _build_gaze_heatmap(dataframe: Any, columns: int = 16, rows: int = 10) -> dict[str, Any]:
+    valid_gaze = dataframe[
+        (dataframe["gazeMissing"] == 0)
+        & dataframe["gazeX"].notna()
+        & dataframe["gazeY"].notna()
+        & (dataframe["gazeX"] > 0)
+        & (dataframe["gazeY"] > 0)
+    ][["gazeX", "gazeY"]]
+
+    if valid_gaze.empty:
+        return {
+            "columns": columns,
+            "rows": rows,
+            "total_points": 0,
+            "x_min": None,
+            "x_max": None,
+            "y_min": None,
+            "y_max": None,
+            "cells": [],
+        }
+
+    x_min = float(valid_gaze["gazeX"].min())
+    x_max = float(valid_gaze["gazeX"].max())
+    y_min = float(valid_gaze["gazeY"].min())
+    y_max = float(valid_gaze["gazeY"].max())
+    x_span = max(x_max - x_min, 1.0)
+    y_span = max(y_max - y_min, 1.0)
+    has_x_spread = x_max > x_min
+    has_y_spread = y_max > y_min
+
+    counts: dict[tuple[int, int], int] = {}
+    for row in valid_gaze.itertuples(index=False):
+        x = _finite_float(row.gazeX)
+        y = _finite_float(row.gazeY)
+        if x is None or y is None:
+            continue
+
+        column_index = (
+            min(columns - 1, max(0, int(((x - x_min) / x_span) * columns)))
+            if has_x_spread
+            else columns // 2
+        )
+        row_index = (
+            min(rows - 1, max(0, int(((y - y_min) / y_span) * rows)))
+            if has_y_spread
+            else rows // 2
+        )
+        key = (column_index, row_index)
+        counts[key] = counts.get(key, 0) + 1
+
+    max_count = max(counts.values()) if counts else 0
+    cells = [
+        {
+            "column": column_index,
+            "row": row_index,
+            "x": round(((column_index + 0.5) / columns) * 100.0, 2),
+            "y": round(((row_index + 0.5) / rows) * 100.0, 2),
+            "count": count,
+            "intensity": round(count / max_count, 4) if max_count > 0 else 0.0,
+        }
+        for (column_index, row_index), count in sorted(counts.items())
+    ]
+
+    return {
+        "columns": columns,
+        "rows": rows,
+        "total_points": int(valid_gaze.shape[0]),
+        "x_min": round(x_min, 4),
+        "x_max": round(x_max, 4),
+        "y_min": round(y_min, 4),
+        "y_max": round(y_max, 4),
+        "cells": cells,
+    }
+
+
+def _build_focus_timeline(minutes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    timeline: list[dict[str, Any]] = []
+
+    for minute in minutes:
+        minute_index = int(minute["minute_index"])
+        timeline.append(
+            {
+                "minute_index": minute_index,
+                "elapsed_seconds": (minute_index - 1) * 60,
+                "focus_score": _round_float(minute.get("focus_score")),
+                "threshold": _round_float(minute.get("threshold")),
+                "focus_state": minute.get("focus_state", "unknown"),
+                "focus_trend": minute.get("focus_trend", "stable"),
+            }
+        )
+
+    return timeline
+
+
 def _build_summary(minutes: list[dict[str, Any]]) -> dict[str, Any]:
     total_minutes = len(minutes)
     avg_gaze_missing_rate = (
@@ -336,6 +440,8 @@ async def analyze_session(
 
         summary = _build_summary(minutes)
         result_metrics = _build_result_metrics(dataframe, minutes, summary)
+        gaze_heatmap = _build_gaze_heatmap(dataframe)
+        focus_timeline = _build_focus_timeline(minutes)
         feedback: str | None = None
         feedback_source: str | None = None
         if include_feedback:
@@ -354,6 +460,8 @@ async def analyze_session(
             "summary": summary,
             "minutes": minutes,
             "result_metrics": result_metrics,
+            "gaze_heatmap": gaze_heatmap,
+            "focus_timeline": focus_timeline,
             "feedback": feedback,
             "feedback_source": feedback_source,
         }

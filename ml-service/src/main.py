@@ -120,6 +120,35 @@ class ResultMetrics(BaseModel):
     focus_ratio: Optional[int] = None
 
 
+class GazeHeatmapCell(BaseModel):
+    column: int
+    row: int
+    x: float
+    y: float
+    count: int
+    intensity: float
+
+
+class GazeHeatmap(BaseModel):
+    columns: int
+    rows: int
+    total_points: int
+    x_min: Optional[float] = None
+    x_max: Optional[float] = None
+    y_min: Optional[float] = None
+    y_max: Optional[float] = None
+    cells: list[GazeHeatmapCell]
+
+
+class FocusTimelinePoint(BaseModel):
+    minute_index: int
+    elapsed_seconds: int
+    focus_score: Optional[float] = None
+    threshold: Optional[float] = None
+    focus_state: str
+    focus_trend: str
+
+
 class AnalyzeResponse(BaseModel):
     userId: str
     sessionId: str
@@ -127,6 +156,8 @@ class AnalyzeResponse(BaseModel):
     summary: AnalysisSummary
     minutes: list[MinuteAnalysis]
     result_metrics: ResultMetrics
+    gaze_heatmap: GazeHeatmap
+    focus_timeline: list[FocusTimelinePoint]
     feedback: Optional[str] = None
     feedback_source: Optional[str] = None
 

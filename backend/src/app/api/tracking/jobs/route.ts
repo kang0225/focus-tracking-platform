@@ -22,6 +22,31 @@ interface MlAnalyzeResponse {
   };
   feedback?: string | null;
   feedback_source?: string | null;
+  gaze_heatmap?: {
+    columns: number;
+    rows: number;
+    total_points: number;
+    x_min?: number | null;
+    x_max?: number | null;
+    y_min?: number | null;
+    y_max?: number | null;
+    cells: {
+      column: number;
+      row: number;
+      x: number;
+      y: number;
+      count: number;
+      intensity: number;
+    }[];
+  } | null;
+  focus_timeline?: {
+    minute_index: number;
+    elapsed_seconds: number;
+    focus_score?: number | null;
+    threshold?: number | null;
+    focus_state: string;
+    focus_trend: string;
+  }[];
 }
 
 function isValidRequest(value: unknown): value is TrackingAnalysisJobRequest {
@@ -56,6 +81,26 @@ function buildCompletedResult(analysis: MlAnalyzeResponse): NonNullable<Tracking
     : analysis.duration_minutes * 60;
   const avgBpm = typeof metrics?.avg_bpm === 'number' ? metrics.avg_bpm : undefined;
   const focusRatio = typeof metrics?.focus_ratio === 'number' ? metrics.focus_ratio : undefined;
+  const gazeHeatmap = analysis.gaze_heatmap
+    ? {
+      columns: analysis.gaze_heatmap.columns,
+      rows: analysis.gaze_heatmap.rows,
+      totalPoints: analysis.gaze_heatmap.total_points,
+      xMin: typeof analysis.gaze_heatmap.x_min === 'number' ? analysis.gaze_heatmap.x_min : undefined,
+      xMax: typeof analysis.gaze_heatmap.x_max === 'number' ? analysis.gaze_heatmap.x_max : undefined,
+      yMin: typeof analysis.gaze_heatmap.y_min === 'number' ? analysis.gaze_heatmap.y_min : undefined,
+      yMax: typeof analysis.gaze_heatmap.y_max === 'number' ? analysis.gaze_heatmap.y_max : undefined,
+      cells: analysis.gaze_heatmap.cells,
+    }
+    : undefined;
+  const focusTimeline = analysis.focus_timeline?.map((point) => ({
+    minuteIndex: point.minute_index,
+    elapsedSeconds: point.elapsed_seconds,
+    focusScore: typeof point.focus_score === 'number' ? point.focus_score : undefined,
+    threshold: typeof point.threshold === 'number' ? point.threshold : undefined,
+    focusState: point.focus_state,
+    focusTrend: point.focus_trend,
+  }));
 
   return {
     durationSeconds,
@@ -64,6 +109,8 @@ function buildCompletedResult(analysis: MlAnalyzeResponse): NonNullable<Tracking
     summary: buildResultSummary(analysis, focusRatio),
     feedback: analysis.feedback ?? undefined,
     feedbackSource: analysis.feedback_source ?? undefined,
+    gazeHeatmap,
+    focusTimeline,
   };
 }
 
