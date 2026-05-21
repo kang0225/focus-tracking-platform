@@ -276,10 +276,6 @@ export async function createTrackingAnalysisJob(request: TrackingAnalysisJobRequ
   };
   const trackingStreamKey = `tracking:${request.meetingId}:${request.userId}:stream`;
   const statusKey = `tracking:job:${jobId}:status`;
-  const jobPayload = JSON.stringify({
-    ...status,
-    trackingStreamKey,
-  });
 
   await sendRedisCommand([
     'SET',
@@ -289,22 +285,25 @@ export async function createTrackingAnalysisJob(request: TrackingAnalysisJobRequ
     String(60 * 60 * 24),
   ]);
 
-  await sendRedisCommand([
-    'XADD',
-    process.env.REDIS_ANALYSIS_JOBS_STREAM || 'tracking:analysis:jobs',
-    'MAXLEN',
-    '~',
-    String(Number(process.env.REDIS_ANALYSIS_JOBS_MAXLEN ?? DEFAULT_STREAM_MAXLEN) || DEFAULT_STREAM_MAXLEN),
-    '*',
-    'data',
-    jobPayload,
-  ]);
-
   return {
     jobId,
     statusKey,
     trackingStreamKey,
   };
+}
+
+export async function setTrackingAnalysisJobStatus(status: TrackingAnalysisJobStatus) {
+  const statusKey = `tracking:job:${status.jobId}:status`;
+
+  await sendRedisCommand([
+    'SET',
+    statusKey,
+    JSON.stringify(status),
+    'EX',
+    String(60 * 60 * 24),
+  ]);
+
+  return { statusKey };
 }
 
 export async function getTrackingAnalysisJobStatus(jobId: string) {

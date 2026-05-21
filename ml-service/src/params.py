@@ -30,19 +30,6 @@ def _get_float_env(name: str, default: float) -> float:
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = _get_int_env("REDIS_PORT", 6379)
 SESSION_TTL_SECONDS = _get_int_env("SESSION_TTL_SECONDS", 86_400)
-ANALYSIS_JOBS_STREAM = os.getenv(
-    "REDIS_ANALYSIS_JOBS_STREAM",
-    "tracking:analysis:jobs",
-)
-ANALYSIS_JOBS_GROUP = os.getenv(
-    "REDIS_ANALYSIS_JOBS_GROUP",
-    "ml-service",
-)
-ANALYSIS_JOBS_CONSUMER = os.getenv(
-    "REDIS_ANALYSIS_JOBS_CONSUMER",
-    "ml-service-1",
-)
-JOB_STATUS_TTL_SECONDS = _get_int_env("JOB_STATUS_TTL_SECONDS", 60 * 60 * 24)
 
 # 윈도우 분할 설정
 WINDOW_SIZE = _get_int_env("WINDOW_SIZE", 60)
