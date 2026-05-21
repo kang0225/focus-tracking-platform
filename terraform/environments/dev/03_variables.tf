@@ -3,7 +3,7 @@ variable "aws_region" {
 }
 
 variable "aws_region_cloudfront" {
-  type = string
+  type    = string
   default = "us-east-1"
 }
 
@@ -83,4 +83,28 @@ variable "domain_name" {
 variable "alert_emails" {
   description = "장애 알림 수신 이메일 목록"
   type        = list(string)
+}
+
+variable "datadog_api_key" {
+  description = "Datadog API key"
+  type        = string
+  sensitive   = true
+}
+
+variable "datadog_app_key" {
+  description = "Datadog application key"
+  type        = string
+  sensitive   = true
+}
+
+variable "datadog_site" {
+  description = "Datadog site domain"
+  type        = string
+  default     = "us5.datadoghq.com"
+}
+
+variable "datadog_aws_account_id" {
+  description = "AWS account ID to connect to Datadog"
+  type        = string
+  default     = "058264452543"
 }
