@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -11,15 +12,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.inference import SessionDataNotFoundError, analyze_session
+from src.job_worker import run_analysis_job_worker
 from src.params import REDIS_HOST, REDIS_PORT, session_records_key
 
 
 redis_client: Optional[redis.Redis] = None
+job_worker_task: Optional[asyncio.Task[None]] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client
+    global job_worker_task, redis_client
 
     redis_client = redis.Redis(
         host=REDIS_HOST,
@@ -33,7 +36,16 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"Redis connection check failed: {exc}")
 
+    job_worker_task = asyncio.create_task(run_analysis_job_worker(redis_client))
+
     yield
+
+    if job_worker_task is not None:
+        job_worker_task.cancel()
+        try:
+            await job_worker_task
+        except asyncio.CancelledError:
+            pass
 
     if redis_client is not None:
         await redis_client.aclose()
@@ -114,12 +126,19 @@ class AnalysisSummary(BaseModel):
     avg_gaze_missing_rate: float
 
 
+class ResultMetrics(BaseModel):
+    duration_seconds: int
+    avg_bpm: Optional[int] = None
+    focus_ratio: Optional[int] = None
+
+
 class AnalyzeResponse(BaseModel):
     userId: str
     sessionId: str
     duration_minutes: int
     summary: AnalysisSummary
     minutes: list[MinuteAnalysis]
+    result_metrics: ResultMetrics
     feedback: Optional[str] = None
     feedback_source: Optional[str] = None
 

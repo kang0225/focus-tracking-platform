@@ -30,6 +30,19 @@ def _get_float_env(name: str, default: float) -> float:
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = _get_int_env("REDIS_PORT", 6379)
 SESSION_TTL_SECONDS = _get_int_env("SESSION_TTL_SECONDS", 86_400)
+ANALYSIS_JOBS_STREAM = os.getenv(
+    "REDIS_ANALYSIS_JOBS_STREAM",
+    "tracking:analysis:jobs",
+)
+ANALYSIS_JOBS_GROUP = os.getenv(
+    "REDIS_ANALYSIS_JOBS_GROUP",
+    "ml-service",
+)
+ANALYSIS_JOBS_CONSUMER = os.getenv(
+    "REDIS_ANALYSIS_JOBS_CONSUMER",
+    "ml-service-1",
+)
+JOB_STATUS_TTL_SECONDS = _get_int_env("JOB_STATUS_TTL_SECONDS", 60 * 60 * 24)
 
 # 윈도우 분할 설정
 WINDOW_SIZE = _get_int_env("WINDOW_SIZE", 60)
@@ -79,3 +92,8 @@ BEDROCK_MAX_ATTEMPTS = _get_int_env("BEDROCK_MAX_ATTEMPTS", 2)
 def session_records_key(user_id: str, session_id: str) -> str:
     """Node.js가 초 단위 기록을 RPUSH해야 하는 Redis 리스트 키."""
     return f"study:session:{user_id}:{session_id}:records"
+
+
+def tracking_stream_key(user_id: str, session_id: str) -> str:
+    """Next.js 백엔드가 초 단위 기록을 XADD하는 Redis Stream 키."""
+    return f"tracking:{session_id}:{user_id}:stream"

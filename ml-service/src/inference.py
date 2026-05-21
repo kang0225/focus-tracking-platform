@@ -14,7 +14,7 @@ from src.model import (
     classify_focus_trend,
     classify_heart_trend,
 )
-from src.params import REDIS_HOST, REDIS_PORT, session_records_key
+from src.params import REDIS_HOST, REDIS_PORT, session_records_key, tracking_stream_key
 from src.preprocessing import (
     calculate_window_features,
     preprocess_tracking_data,
@@ -30,6 +30,72 @@ def create_redis_client() -> redis.Redis:
     return redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
+def _parse_record_json(item: str, index: int) -> dict[str, Any]:
+    try:
+        parsed = json.loads(item)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid JSON record at index {index}.") from exc
+
+    if not isinstance(parsed, dict):
+        raise RuntimeError(f"Record at index {index} is not a JSON object.")
+
+    return parsed
+
+
+def _parse_records_json(records_json: list[str]) -> list[dict[str, Any]]:
+    return [
+        _parse_record_json(item, index)
+        for index, item in enumerate(records_json)
+    ]
+
+
+async def _fetch_list_records(
+    key: str,
+    redis_client: redis.Redis,
+) -> list[dict[str, Any]] | None:
+    key_type = await redis_client.type(key)
+    if key_type == "none":
+        return None
+    if key_type != "list":
+        raise RuntimeError(
+            f"Expected Redis key {key} to be a list written with RPUSH, "
+            f"but found type {key_type!r}."
+        )
+
+    records_json = await redis_client.lrange(key, 0, -1)
+    if not records_json:
+        return None
+
+    return _parse_records_json(records_json)
+
+
+async def _fetch_stream_records(
+    key: str,
+    redis_client: redis.Redis,
+) -> list[dict[str, Any]] | None:
+    key_type = await redis_client.type(key)
+    if key_type == "none":
+        return None
+    if key_type != "stream":
+        raise RuntimeError(
+            f"Expected Redis key {key} to be a stream written with XADD, "
+            f"but found type {key_type!r}."
+        )
+
+    entries = await redis_client.xrange(key, min="-", max="+")
+    if not entries:
+        return None
+
+    records: list[dict[str, Any]] = []
+    for index, (_, fields) in enumerate(entries):
+        data = fields.get("data") if isinstance(fields, dict) else None
+        if not isinstance(data, str):
+            raise RuntimeError(f"Stream record at index {index} has no JSON data field.")
+        records.append(_parse_record_json(data, index))
+
+    return records
+
+
 async def fetch_session_records(
     user_id: str,
     session_id: str,
@@ -38,43 +104,109 @@ async def fetch_session_records(
     """
     Node.js 백엔드가 Redis에 직접 기록한 데이터를 가져온다.
 
-    예상 Redis 형태:
+    지원 Redis 형태:
         key: study:session:{userId}:{sessionId}:records
         type: list
         write command: RPUSH key json_string
+
+        key: tracking:{sessionId}:{userId}:stream
+        type: stream
+        write command: XADD key * data json_string
     """
-    key = session_records_key(user_id, session_id)
+    list_key = session_records_key(user_id, session_id)
+    stream_key = tracking_stream_key(user_id, session_id)
 
     try:
-        key_type = await redis_client.type(key)
-        if key_type == "none":
-            raise SessionDataNotFoundError(f"No records found for key {key}.")
-        if key_type != "list":
-            raise RuntimeError(
-                f"Expected Redis key {key} to be a list written with RPUSH, "
-                f"but found type {key_type!r}."
-            )
-
-        records_json = await redis_client.lrange(key, 0, -1)
+        records = await _fetch_list_records(list_key, redis_client)
+        if records is None:
+            records = await _fetch_stream_records(stream_key, redis_client)
     except redis.RedisError as exc:
-        raise RuntimeError(f"Redis read failed for key {key}: {exc}") from exc
+        raise RuntimeError(
+            f"Redis read failed for keys {list_key} or {stream_key}: {exc}"
+        ) from exc
 
-    if not records_json:
-        raise SessionDataNotFoundError(f"No records found for key {key}.")
-
-    records: list[dict[str, Any]] = []
-    for index, item in enumerate(records_json):
-        try:
-            parsed = json.loads(item)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"Invalid JSON record at index {index}.") from exc
-
-        if not isinstance(parsed, dict):
-            raise RuntimeError(f"Record at index {index} is not a JSON object.")
-
-        records.append(parsed)
+    if not records:
+        raise SessionDataNotFoundError(
+            f"No records found for keys {list_key} or {stream_key}."
+        )
 
     return records
+
+
+def _boolean_focus_ratio(window: Any) -> float | None:
+    if "focusIsFocused" not in window.columns:
+        return None
+
+    values: list[bool] = []
+    for value in window["focusIsFocused"].dropna().tolist():
+        if isinstance(value, bool):
+            values.append(value)
+        elif isinstance(value, (int, float)) and value in (0, 1):
+            values.append(bool(value))
+
+    if not values:
+        return None
+
+    return sum(1 for value in values if value) / len(values)
+
+
+def _raw_focus_score(window: Any) -> tuple[float | None, float | None]:
+    if "focusScore" not in window.columns:
+        return None, None
+
+    scores = window["focusScore"].dropna()
+    if scores.empty:
+        return None, None
+
+    score = float(scores.astype(float).mean())
+    threshold = None
+    if "threshold" in window.columns:
+        thresholds = window["threshold"].dropna()
+        if not thresholds.empty:
+            threshold = float(thresholds.astype(float).mean())
+
+    return score, threshold
+
+
+def _build_result_metrics(
+    dataframe: Any,
+    minutes: list[dict[str, Any]],
+    summary: dict[str, Any],
+) -> dict[str, int | None]:
+    timestamps = dataframe["timestamp"].dropna()
+    if timestamps.empty:
+        duration_seconds = 0
+    else:
+        elapsed = (timestamps.iloc[-1] - timestamps.iloc[0]).total_seconds()
+        duration_seconds = max(1, int(round(elapsed)) + 1)
+
+    heart_values = dataframe["heartRate"].dropna()
+    avg_bpm = (
+        int(round(float(heart_values.mean())))
+        if not heart_values.empty
+        else None
+    )
+
+    focus_ratio = None
+    raw_focus_ratio = _boolean_focus_ratio(dataframe)
+    if raw_focus_ratio is not None:
+        focus_ratio = int(round(raw_focus_ratio * 100))
+    elif minutes:
+        known_minutes = [
+            minute
+            for minute in minutes
+            if minute.get("focus_state") in {"high_focus", "low_focus"}
+        ]
+        if known_minutes:
+            focus_ratio = int(
+                round((summary["high_focus_minutes"] / len(known_minutes)) * 100)
+            )
+
+    return {
+        "duration_seconds": duration_seconds,
+        "avg_bpm": avg_bpm,
+        "focus_ratio": focus_ratio,
+    }
 
 
 async def delete_session_records(
@@ -161,6 +293,20 @@ async def analyze_session(
                 window["rPPG"].to_numpy(dtype=float),
             )
             threshold = features["threshold"]
+
+            boolean_focus_ratio = _boolean_focus_ratio(window)
+            raw_focus_score, raw_focus_threshold = _raw_focus_score(window)
+            if focus_score is None and boolean_focus_ratio is not None:
+                focus_score = boolean_focus_ratio * 100.0
+                threshold = 50.0
+            elif focus_score is None and raw_focus_score is not None:
+                focus_score = raw_focus_score
+                threshold = (
+                    raw_focus_threshold
+                    if raw_focus_threshold is not None
+                    else threshold
+                )
+
             focus_state = classify_focus_state(focus_score, threshold)
             focus_trend = classify_focus_trend(
                 focus_score,
@@ -189,6 +335,7 @@ async def analyze_session(
             await delete_session_records(user_id, session_id, client)
 
         summary = _build_summary(minutes)
+        result_metrics = _build_result_metrics(dataframe, minutes, summary)
         feedback: str | None = None
         feedback_source: str | None = None
         if include_feedback:
@@ -206,6 +353,7 @@ async def analyze_session(
             "duration_minutes": len(minutes),
             "summary": summary,
             "minutes": minutes,
+            "result_metrics": result_metrics,
             "feedback": feedback,
             "feedback_source": feedback_source,
         }
