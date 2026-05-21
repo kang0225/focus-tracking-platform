@@ -12,7 +12,7 @@ resource "aws_s3_bucket_versioning" "state_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
-} 
+}
 
 # 상태 파일 암호화
 resource "aws_s3_bucket_server_side_encryption_configuration" "state_encryption" {
@@ -95,7 +95,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
     effect = "Allow"
 
     actions = [
-      "s3:ListBucket", # 버킷 안 조회
+      "s3:ListBucket",         # 버킷 안 조회
       "s3:GetBucketVersioning" # 버저닝 활성화 여부 조회
     ]
 
@@ -109,8 +109,8 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
     effect = "Allow"
 
     actions = [
-      "s3:GetObject", # 상태 파일 읽기
-      "s3:PutObject", # 상태 파일 생성
+      "s3:GetObject",   # 상태 파일 읽기
+      "s3:PutObject",   # 상태 파일 생성
       "s3:DeleteObject" # 상태 파일 제거
     ]
 
@@ -125,9 +125,9 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
 
     actions = [
       "dynamodb:DescribeTable", # 테이블을 조회
-      "dynamodb:GetItem", # 락 상태 조회
-      "dynamodb:PutItem", # 락을 생성하여 하나의 트랜잭션만 허용
-      "dynamodb:DeleteItem" # 락을 제거하여 트랜잭션 완료 처리
+      "dynamodb:GetItem",       # 락 상태 조회
+      "dynamodb:PutItem",       # 락을 생성하여 하나의 트랜잭션만 허용
+      "dynamodb:DeleteItem"     # 락을 제거하여 트랜잭션 완료 처리
     ]
 
     resources = [
@@ -158,7 +158,8 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "ssm:*",
       "codedeploy:*",
       "sns:*",
-      "firehose:*"
+      "firehose:*",
+      "lambda:*"
     ]
 
     resources = ["*"]
