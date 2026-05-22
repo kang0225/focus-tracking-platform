@@ -61,7 +61,7 @@ AWS_REGION = (
 BEDROCK_REGION = os.getenv("BEDROCK_REGION", AWS_REGION).strip()
 BEDROCK_MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
-    "anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 ).strip()
 BEDROCK_MAX_OUTPUT_TOKENS = _get_int_env("BEDROCK_MAX_OUTPUT_TOKENS", 700)
 BEDROCK_TEMPERATURE = _get_float_env("BEDROCK_TEMPERATURE", 0.2)

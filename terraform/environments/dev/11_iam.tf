@@ -150,20 +150,38 @@ resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
 ### ML EC2 Bedrock 권한 추가 ###
 ################################
 
-# ml-service가 boto3로 Bedrock(Claude Sonnet 4.5)를 호출하기 위한 권한
+# ml-service가 boto3로 Bedrock Claude Sonnet 4.5 global inference profile을 호출하기 위한 권한
 resource "aws_iam_role_policy" "ml_ec2_bedrock" {
   name = "${var.project_name}-${var.environment}-bedrock-invoke"
   role = aws_iam_role.ml_ec2_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AllowBedrockInvokeClaudeSonnet"
-      Effect = "Allow"
-      Action = ["bedrock:InvokeModel"]
-      Resource = [
-        "arn:aws:bedrock:ap-northeast-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
-      ]
-    }]
+    Statement = [
+      {
+        Sid    = "AllowBedrockInvokeClaudeSonnetGlobalProfile"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        ]
+      },
+      {
+        Sid    = "AllowBedrockInvokeClaudeSonnetRegionalModel"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+        ]
+      },
+      {
+        Sid    = "AllowBedrockInvokeClaudeSonnetGlobalModel"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+        ]
+      }
+    ]
   })
 }
