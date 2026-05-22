@@ -102,7 +102,7 @@ jobs:
               \"echo AWS_REGION=ap-northeast-2 >> /opt/ml-service/.env\",
               \"echo AWS_DEFAULT_REGION=ap-northeast-2 >> /opt/ml-service/.env\",
               \"echo BEDROCK_REGION=ap-northeast-2 >> /opt/ml-service/.env\",
-              \"echo BEDROCK_MODEL_ID=anthropic.claude-sonnet-4-5-20250929-v1:0 >> /opt/ml-service/.env\",
+              \"echo BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-5-20250929-v1:0 >> /opt/ml-service/.env\",
               \"echo BEDROCK_MAX_OUTPUT_TOKENS=700 >> /opt/ml-service/.env\",
               \"echo BEDROCK_TEMPERATURE=0.2 >> /opt/ml-service/.env\",
               \"cd /opt/ml-service\",
