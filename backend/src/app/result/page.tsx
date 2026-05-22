@@ -292,7 +292,9 @@ function ResultContent() {
   const isWaitingForJob = !!jobId && jobStatus !== 'completed' && jobStatus !== 'failed';
   const coachFeedbackSourceLabel = jobResult?.feedbackSource === 'bedrock'
     ? 'LLM 피드백'
-    : 'AI 피드백';
+    : '생성 안 됨';
+  const coachFeedbackText = jobResult?.feedback2
+    ?? 'Bedrock LLM 피드백을 생성하지 못했습니다. 기본 분석 요약을 참고해 주세요.';
 
   useEffect(() => {
     if (!jobId) return undefined;
@@ -561,7 +563,7 @@ function ResultContent() {
           </div>
         )}
 
-        {jobResult?.feedback2 && (
+        {jobResult && (
           <div className="mt-6 rounded-2xl bg-cyan-900/20 p-8 ring-1 ring-cyan-500/20 backdrop-blur-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">AI 학습 코치 피드백</h2>
@@ -570,7 +572,7 @@ function ResultContent() {
               </span>
             </div>
             <p className="whitespace-pre-line leading-7 text-slate-200">
-              {jobResult.feedback2}
+              {coachFeedbackText}
             </p>
           </div>
         )}
