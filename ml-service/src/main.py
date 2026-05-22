@@ -159,6 +159,7 @@ class AnalyzeResponse(BaseModel):
     gaze_heatmap: GazeHeatmap
     focus_timeline: list[FocusTimelinePoint]
     feedback: Optional[str] = None
+    feedback2: Optional[str] = None
     feedback_source: Optional[str] = None
 
 

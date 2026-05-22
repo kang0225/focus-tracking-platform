@@ -443,9 +443,10 @@ async def analyze_session(
         gaze_heatmap = _build_gaze_heatmap(dataframe)
         focus_timeline = _build_focus_timeline(minutes)
         feedback: str | None = None
+        feedback2: str | None = None
         feedback_source: str | None = None
         if include_feedback:
-            feedback, feedback_source = await generate_study_feedback(
+            feedback, feedback2, feedback_source = await generate_study_feedback(
                 user_id=user_id,
                 session_id=session_id,
                 duration_minutes=len(minutes),
@@ -463,6 +464,7 @@ async def analyze_session(
             "gaze_heatmap": gaze_heatmap,
             "focus_timeline": focus_timeline,
             "feedback": feedback,
+            "feedback2": feedback2,
             "feedback_source": feedback_source,
         }
     finally:

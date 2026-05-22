@@ -211,15 +211,16 @@ async def generate_study_feedback(
     duration_minutes: int,
     summary: dict[str, Any],
     minutes: list[dict[str, Any]],
-) -> tuple[str, str]:
+) -> tuple[str, str | None, str]:
     """
     한국어 학습 피드백을 생성한다.
 
-    (피드백, 출처)를 반환하며, 출처는 "bedrock" 또는 "local_fallback"이다.
+    (로컬 요약, LLM 피드백, 출처)를 반환하며, 출처는 "bedrock" 또는
+    "local_fallback"이다.
     """
-    fallback = build_local_feedback(duration_minutes, summary, minutes)
+    local_feedback = build_local_feedback(duration_minutes, summary, minutes)
     if not BEDROCK_MODEL_ID:
-        return fallback, "local_fallback"
+        return local_feedback, None, "local_fallback"
 
     prompt_payload = _build_prompt_payload(
         user_id,
@@ -232,8 +233,8 @@ async def generate_study_feedback(
     try:
         text = await asyncio.to_thread(_invoke_bedrock_feedback, prompt_payload)
         if text:
-            return text, "bedrock"
+            return local_feedback, text, "bedrock"
     except Exception as exc:
         print(f"Bedrock feedback generation failed: {exc}")
 
-    return fallback, "local_fallback"
+    return local_feedback, None, "local_fallback"

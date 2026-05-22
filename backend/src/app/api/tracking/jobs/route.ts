@@ -21,6 +21,7 @@ interface MlAnalyzeResponse {
     focus_ratio?: number | null;
   };
   feedback?: string | null;
+  feedback2?: string | null;
   feedback_source?: string | null;
   gaze_heatmap?: {
     columns: number;
@@ -108,6 +109,7 @@ function buildCompletedResult(analysis: MlAnalyzeResponse): NonNullable<Tracking
     focusRatio,
     summary: buildResultSummary(analysis, focusRatio),
     feedback: analysis.feedback ?? undefined,
+    feedback2: analysis.feedback2 ?? undefined,
     feedbackSource: analysis.feedback_source ?? undefined,
     gazeHeatmap,
     focusTimeline,
