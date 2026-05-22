@@ -17,7 +17,9 @@ export interface TimestampedSample {
 interface NormalizedSamples {
   values: number[];
   timesSeconds: number[];
+  qualities: number[];
   durationSeconds: number;
+  averageQuality: number;
 }
 
 interface SpectralBin {
@@ -105,10 +107,11 @@ function normalizeSamples(samples: ArrayLike<number> | TimestampedSample[], fps:
   }
 
   const count = samples.length;
-  if (count === 0) return { values: [], timesSeconds: [], durationSeconds: 0 };
+  if (count === 0) return { values: [], timesSeconds: [], qualities: [], durationSeconds: 0, averageQuality: 0 };
 
   const values: number[] = [];
   const timesSeconds: number[] = [];
+  const qualities: number[] = [];
   const first = (samples as ArrayLike<number | TimestampedSample>)[0];
   let firstTimeMs: number | null = null;
 
@@ -128,6 +131,7 @@ function normalizeSamples(samples: ArrayLike<number> | TimestampedSample[], fps:
 
       values.push(value);
       timesSeconds.push(relativeSeconds);
+      qualities.push(clamp(Number(sample.quality ?? 1), 0, 1));
     }
   } else {
     const sampleRate = Number(fps);
@@ -140,14 +144,18 @@ function normalizeSamples(samples: ArrayLike<number> | TimestampedSample[], fps:
       if (!Number.isFinite(value)) continue;
       values.push(value);
       timesSeconds.push(i / sampleRate);
+      qualities.push(1);
     }
   }
 
   const durationSeconds = values.length > 1
     ? Math.max(0, timesSeconds[timesSeconds.length - 1] - timesSeconds[0])
     : 0;
+  const averageQuality = qualities.length > 0
+    ? qualities.reduce((sum, quality) => sum + quality, 0) / qualities.length
+    : 0;
 
-  return { values, timesSeconds, durationSeconds };
+  return { values, timesSeconds, qualities, durationSeconds, averageQuality };
 }
 
 function meanAndStd(values: number[]) {
@@ -558,6 +566,105 @@ function highFrequencyPpiPower(series: PpiSeries, sampleRate = 2) {
   return Math.max(bandPower, EPSILON);
 }
 
+function estimatePpiBpm(
+  processed: number[],
+  timesSeconds: number[],
+  minBpm: number,
+  maxBpm: number,
+) {
+  const durationSeconds = timesSeconds.length > 1
+    ? timesSeconds[timesSeconds.length - 1] - timesSeconds[0]
+    : 0;
+  const sampleRate = processed.length > 1 && durationSeconds > 0
+    ? (processed.length - 1) / durationSeconds
+    : 0;
+  if (sampleRate <= 0) return null;
+
+  const ppiSeries = detectPpiSeries(
+    processed,
+    timesSeconds,
+    sampleRate,
+    60000 / maxBpm,
+    60000 / minBpm,
+  );
+  if (!ppiSeries || ppiSeries.intervalsMs.length < 3) return null;
+
+  const ppiMs = median(ppiSeries.intervalsMs);
+  const bpm = 60000 / Math.max(ppiMs, EPSILON);
+  if (!Number.isFinite(bpm) || bpm < minBpm || bpm > maxBpm) return null;
+
+  const { mean, std } = meanAndStd(ppiSeries.intervalsMs);
+  const coefficientOfVariation = std / Math.max(mean, EPSILON);
+  const regularity = clamp(1 - coefficientOfVariation / 0.22, 0, 1);
+  const intervalScore = clamp((ppiSeries.intervalsMs.length - 2) / 8, 0, 1);
+  const confidence = clamp(regularity * 0.7 + intervalScore * 0.3, 0, 1);
+
+  return {
+    bpm,
+    confidence,
+    intervalCount: ppiSeries.intervalsMs.length,
+    coefficientOfVariation,
+  };
+}
+
+function correctPeakWithPpi(
+  spectrum: SpectralBin[],
+  peak: SpectralBin,
+  ppiBpm: ReturnType<typeof estimatePpiBpm>,
+  stepHz: number,
+) {
+  if (!ppiBpm || ppiBpm.confidence < 0.45) return peak;
+
+  const peakBpm = peak.frequencyHz * 60;
+  const harmonicLike = peakBpm >= 108
+    && ppiBpm.bpm >= RELIABLE_LOW_BPM
+    && ppiBpm.bpm <= 108
+    && Math.abs(peakBpm - ppiBpm.bpm * 2) <= Math.max(12, ppiBpm.bpm * 0.18);
+  if (!harmonicLike) return peak;
+
+  const index = strongestBinNear(spectrum, ppiBpm.bpm / 60, Math.max(0.1, stepHz * 5));
+  if (index < 0) return peak;
+
+  const candidate = refinePeak(spectrum, index, stepHz);
+  const relativePower = candidate.power / Math.max(peak.power, EPSILON);
+  const requiredPower = harmonicLike ? 0.22 : 0.42;
+
+  return relativePower >= requiredPower ? candidate : peak;
+}
+
+function correctLikelyLowLock(spectrum: SpectralBin[], peak: SpectralBin, stepHz: number) {
+  const peakBpm = peak.frequencyHz * 60;
+  if (peakBpm >= 68) return peak;
+
+  const noiseFloor = median(spectrum.map((bin) => bin.power));
+  let best: (SpectralBin & { relativePower: number }) | null = null;
+  let bestScore = -Infinity;
+
+  for (let index = 1; index < spectrum.length - 1; index += 1) {
+    const current = spectrum[index];
+    const bpm = current.frequencyHz * 60;
+    if (bpm < 72 || bpm > 105) continue;
+    if (current.power < spectrum[index - 1].power || current.power < spectrum[index + 1].power) continue;
+
+    const candidate = refinePeak(spectrum, index, stepHz);
+    const relativePower = candidate.power / Math.max(peak.power, EPSILON);
+    const signalOverNoise = candidate.power / Math.max(noiseFloor, EPSILON);
+    if (relativePower < 0.42 || signalOverNoise < 2.1) continue;
+
+    const bpmScore = bpm <= 92 ? 1.15 : 1;
+    const score = relativePower * signalOverNoise * bpmScore;
+    if (score > bestScore) {
+      best = { ...candidate, relativePower };
+      bestScore = score;
+    }
+  }
+
+  if (!best) return peak;
+
+  const requiredPower = peakBpm < 58 ? 0.62 : 0.48;
+  return best.relativePower >= requiredPower ? best : peak;
+}
+
 function normalizeFocusScore(rawScore: number, thresholdRawScore: number, spanRawScore: number) {
   const normalized = 50
     + ((rawScore - thresholdRawScore) / Math.max(spanRawScore, MIN_FOCUS_NORMALIZATION_SPAN, EPSILON)) * 50;
@@ -569,16 +676,19 @@ function confidenceFromSpectrum({
   minDurationSeconds,
   peakToMedian,
   prominence,
+  averageQuality,
 }: {
   durationSeconds: number;
   minDurationSeconds: number;
   peakToMedian: number;
   prominence: number;
+  averageQuality: number;
 }) {
   const signalScore = clamp((Math.log2(Math.max(peakToMedian, 1)) - 1) / 3, 0, 1);
   const prominenceScore = clamp((prominence - 1.05) / 1.5, 0, 1);
   const durationScore = clamp((durationSeconds - minDurationSeconds) / 6, 0, 1);
-  return clamp(signalScore * 0.55 + prominenceScore * 0.35 + durationScore * 0.1, 0, 1);
+  const qualityScore = clamp((averageQuality - 0.35) / 0.65, 0, 1);
+  return clamp((signalScore * 0.5 + prominenceScore * 0.32 + durationScore * 0.08) * (0.75 + qualityScore * 0.25), 0, 1);
 }
 
 export interface BpmEstimate {
@@ -625,7 +735,7 @@ export function estimateBpm(samples: ArrayLike<number> | TimestampedSample[], {
   frequencyStepHz?: number;
   preferredBpm?: number | null;
 } = {}): BpmEstimate | null {
-  const { values, timesSeconds, durationSeconds } = normalizeSamples(samples, fps);
+  const { values, timesSeconds, qualities, durationSeconds, averageQuality } = normalizeSamples(samples, fps);
   const sampleCount = values.length;
 
   if (sampleCount < minSamples || durationSeconds < minDurationSeconds) return null;
@@ -650,7 +760,8 @@ export function estimateBpm(samples: ArrayLike<number> | TimestampedSample[], {
     let imag = 0;
 
     for (let i = 0; i < sampleCount; i += 1) {
-      const windowed = processed[i] * hann(i, sampleCount);
+      const qualityWeight = Math.sqrt(clamp(qualities[i] ?? 1, 0, 1));
+      const windowed = processed[i] * hann(i, sampleCount) * qualityWeight;
       const phase = angular * timesSeconds[i];
       real += windowed * Math.cos(phase);
       imag -= windowed * Math.sin(phase);
@@ -670,13 +781,17 @@ export function estimateBpm(samples: ArrayLike<number> | TimestampedSample[], {
   const selectedIndex = choosePeakIndex(spectrum, preferredBpm ?? undefined);
   const rawPeak = refinePeak(spectrum, selectedIndex >= 0 ? selectedIndex : bestIndex, stepHz);
   const harmonicCorrected = correctLikelyHarmonic(spectrum, rawPeak, stepHz, minHz);
-  const refined = correctLikelyHighAlias(spectrum, harmonicCorrected, stepHz, minHz);
+  const aliasCorrected = correctLikelyHighAlias(spectrum, harmonicCorrected, stepHz, minHz);
+  const ppiBpm = estimatePpiBpm(processed, timesSeconds, minBpm, maxBpm);
+  const ppiCorrected = correctPeakWithPpi(spectrum, aliasCorrected, ppiBpm, stepHz);
+  const refined = correctLikelyLowLock(spectrum, ppiCorrected, stepHz);
   const { peakToAverage, peakToMedian, prominence } = peakStats(spectrum, refined.frequencyHz, refined.power);
   const confidence = confidenceFromSpectrum({
     durationSeconds,
     minDurationSeconds,
     peakToMedian,
     prominence,
+    averageQuality,
   });
 
   return {
@@ -778,7 +893,7 @@ export class RollingBpmEstimator {
   minConfidence: number;
   minSampleQuality: number;
   maxBpmDelta: number;
-  samples: Required<Pick<TimestampedSample, 'value' | 'timeMs'>>[] = [];
+  samples: Required<Pick<TimestampedSample, 'value' | 'timeMs' | 'quality'>>[] = [];
   smoothedBpm: number | null = null;
   lastOutputTimeMs: number | null = null;
 
@@ -823,7 +938,7 @@ export class RollingBpmEstimator {
   add(value: number, timeMs = Date.now(), quality = 1): BpmEstimate | null {
     const normalizedQuality = clamp(Number.isFinite(Number(quality)) ? Number(quality) : 1, 0, 1);
     if (normalizedQuality >= clamp(this.minSampleQuality, 0, 1)) {
-      const sample = { value: Number(value), timeMs: Number(timeMs) };
+      const sample = { value: Number(value), timeMs: Number(timeMs), quality: normalizedQuality };
       this.samples.push(sample);
     }
     this.prune(timeMs);

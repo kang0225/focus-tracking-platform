@@ -35,6 +35,7 @@ interface RppgSession {
   id: string;
   state: FacePhysState;
   estimator: RollingBpmEstimator;
+  colorEstimator: RollingBpmEstimator;
   focusSamples: Required<Pick<TimestampedSample, 'value' | 'timeMs'>>[];
   focusThresholdState: RppgFocusThresholdState;
   fps: number;
@@ -120,6 +121,64 @@ function frameMotionScore(current: ArrayLike<number>, previous: ArrayLike<number
   return residualMotion / pixelCount;
 }
 
+function colorPulseValue(frame: ArrayLike<number>) {
+  const pixelCount = Math.floor(frame.length / CHANNELS);
+  if (pixelCount <= 0) return 0;
+
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  for (let index = 0; index < frame.length; index += CHANNELS) {
+    red += Number(frame[index]);
+    green += Number(frame[index + 1]);
+    blue += Number(frame[index + 2]);
+  }
+
+  red /= pixelCount;
+  green /= pixelCount;
+  blue /= pixelCount;
+
+  const luma = 0.299 * red + 0.587 * green + 0.114 * blue;
+  const chromaPulse = green - ((red + blue) / 2);
+  return chromaPulse / Math.max(luma, 0.04);
+}
+
+function chooseBpmEstimate(modelBpm: BpmEstimate | null, colorBpm: BpmEstimate | null) {
+  if (!modelBpm) return colorBpm;
+  if (!colorBpm) return modelBpm;
+
+  const modelConfidence = modelBpm.confidence;
+  const colorConfidence = colorBpm.confidence;
+  const modelValue = modelBpm.bpm;
+  const colorValue = colorBpm.bpm;
+  const colorIsStable = colorBpm.phase === 'stable';
+  const modelLowLock = modelValue < 68 && colorValue >= 74 && colorValue <= 105;
+
+  if (modelLowLock && colorConfidence >= 0.18 && colorConfidence >= modelConfidence * 0.65) {
+    return {
+      ...colorBpm,
+      confidence: Math.max(colorBpm.confidence, modelBpm.confidence * 0.85),
+    };
+  }
+
+  if (colorIsStable && colorConfidence >= modelConfidence + 0.12) return colorBpm;
+
+  if (Math.abs(modelValue - colorValue) <= 8 && colorConfidence >= 0.18) {
+    const modelWeight = Math.max(modelConfidence, 0.15);
+    const colorWeight = Math.max(colorConfidence, 0.15);
+    const blendedBpm = ((modelValue * modelWeight) + (colorValue * colorWeight)) / (modelWeight + colorWeight);
+    return {
+      ...modelBpm,
+      bpm: blendedBpm,
+      rawBpm: modelBpm.rawBpm ?? modelBpm.bpm,
+      confidence: Math.max(modelConfidence, colorConfidence * 0.9),
+    };
+  }
+
+  return modelBpm;
+}
+
 async function loadOrtRuntime(): Promise<OrtRuntime> {
   const imported = await import('onnxruntime-node');
   const candidate = (imported as unknown as { default?: OrtRuntime }).default ?? imported;
@@ -161,19 +220,38 @@ function normalizedFps(fps: unknown) {
 function makeEstimator(fps: number) {
   return new RollingBpmEstimator({
     fps,
-    windowSeconds: 14,
+    windowSeconds: 18,
     minBpm: 45,
     maxBpm: 180,
-    minSamples: Math.max(60, Math.round(fps * 5)),
-    minDurationSeconds: 5,
+    minSamples: Math.max(90, Math.round(fps * 7)),
+    minDurationSeconds: 7,
     previewMinSamples: Math.max(24, Math.round(fps * 1.8)),
     previewMinDurationSeconds: 1.8,
     previewMaxBpm: 135,
-    previewMinConfidence: 0,
-    smoothing: 0.72,
-    minConfidence: 0.18,
-    minSampleQuality: 0.2,
+    previewMinConfidence: 0.04,
+    smoothing: 0.78,
+    minConfidence: 0.24,
+    minSampleQuality: 0.25,
     maxBpmDelta: 8,
+  });
+}
+
+function makeColorEstimator(fps: number) {
+  return new RollingBpmEstimator({
+    fps,
+    windowSeconds: 18,
+    minBpm: 50,
+    maxBpm: 150,
+    minSamples: Math.max(90, Math.round(fps * 7)),
+    minDurationSeconds: 7,
+    previewMinSamples: Math.max(36, Math.round(fps * 2.4)),
+    previewMinDurationSeconds: 2.4,
+    previewMaxBpm: 130,
+    previewMinConfidence: 0.05,
+    smoothing: 0.74,
+    minConfidence: 0.2,
+    minSampleQuality: 0.25,
+    maxBpmDelta: 10,
   });
 }
 
@@ -184,6 +262,7 @@ async function createSession(id: string | undefined, fps: number): Promise<RppgS
     id: id || makeSessionId(),
     state: cloneState(runtime.initialState),
     estimator: makeEstimator(fps),
+    colorEstimator: makeColorEstimator(fps),
     focusSamples: [],
     focusThresholdState: createInitialRppgFocusThresholdState(),
     fps,
@@ -331,7 +410,9 @@ export async function runRppgFrame(request: RppgFrameRequest): Promise<RppgFrame
   session.state = result.state;
 
   session.signalTimeMs += dt * 1000;
-  const bpm = session.estimator.add(result.value, session.signalTimeMs, sampleQuality);
+  const modelBpm = session.estimator.add(result.value, session.signalTimeMs, sampleQuality);
+  const colorBpm = session.colorEstimator.add(colorPulseValue(frame.data), session.signalTimeMs, sampleQuality);
+  const bpm = chooseBpmEstimate(modelBpm, colorBpm);
   addFocusSample(session, result.value, session.signalTimeMs, sampleQuality);
   const focus = estimateRppgFocus(session.focusSamples, {
     fps: session.fps,
