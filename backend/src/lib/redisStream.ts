@@ -282,6 +282,7 @@ export interface TrackingAnalysisJobStatus {
     focusRatio?: number;
     summary?: string;
     feedback?: string;
+    feedback2?: string;
     feedbackSource?: string;
     gazeHeatmap?: GazeHeatmap;
     focusTimeline?: FocusTimelinePoint[];
