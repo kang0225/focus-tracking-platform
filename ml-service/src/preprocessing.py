@@ -18,7 +18,18 @@ from src.params import (
 
 
 REQUIRED_COLUMNS = ("timestamp", "gazeX", "gazeY")
-NUMERIC_COLUMNS = ("gazeX", "gazeY", "heartRate", "rPPG", "threshold", "focusScore")
+NUMERIC_COLUMNS = (
+    "gazeX",
+    "gazeY",
+    "rawGazeX",
+    "rawGazeY",
+    "gazeViewportWidth",
+    "gazeViewportHeight",
+    "heartRate",
+    "rPPG",
+    "threshold",
+    "focusScore",
+)
 
 
 def _finite_or_none(value: Any) -> float | None:
@@ -55,6 +66,38 @@ def _normalize_record_columns(df: pd.DataFrame) -> pd.DataFrame:
             normalized["gazeX"] = normalized["gaze"].map(lambda value: _nested_number(value, "x"))
         if "gazeY" not in normalized.columns:
             normalized["gazeY"] = normalized["gaze"].map(lambda value: _nested_number(value, "y"))
+        if "rawGazeX" not in normalized.columns:
+            normalized["rawGazeX"] = normalized["gaze"].map(lambda value: _nested_number(value, "rawX"))
+        if "rawGazeY" not in normalized.columns:
+            normalized["rawGazeY"] = normalized["gaze"].map(lambda value: _nested_number(value, "rawY"))
+        if "gazeViewportWidth" not in normalized.columns:
+            normalized["gazeViewportWidth"] = normalized["gaze"].map(lambda value: _nested_number(value, "viewportWidth"))
+        if "gazeViewportHeight" not in normalized.columns:
+            normalized["gazeViewportHeight"] = normalized["gaze"].map(lambda value: _nested_number(value, "viewportHeight"))
+
+    if "rawGazeX" not in normalized.columns:
+        for alias in ("rawX", "raw_gaze_x", "rawGazeX"):
+            if alias in normalized.columns:
+                normalized["rawGazeX"] = normalized[alias]
+                break
+
+    if "rawGazeY" not in normalized.columns:
+        for alias in ("rawY", "raw_gaze_y", "rawGazeY"):
+            if alias in normalized.columns:
+                normalized["rawGazeY"] = normalized[alias]
+                break
+
+    if "gazeViewportWidth" not in normalized.columns:
+        for alias in ("viewportWidth", "screenWidth", "windowWidth"):
+            if alias in normalized.columns:
+                normalized["gazeViewportWidth"] = normalized[alias]
+                break
+
+    if "gazeViewportHeight" not in normalized.columns:
+        for alias in ("viewportHeight", "screenHeight", "windowHeight"):
+            if alias in normalized.columns:
+                normalized["gazeViewportHeight"] = normalized[alias]
+                break
 
     if "rPPG" not in normalized.columns:
         for alias in ("rppg", "rppgValue", "rPPGValue"):

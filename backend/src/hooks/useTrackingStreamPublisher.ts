@@ -26,6 +26,10 @@ interface UseTrackingStreamPublisherOptions {
 }
 
 function buildPayload(latest: TrackingStreamData, paused: boolean) {
+  const viewport = typeof window === 'undefined'
+    ? { width: undefined, height: undefined }
+    : { width: window.innerWidth, height: window.innerHeight };
+
   if (paused) {
     return {
       meetingId: latest.meetingId,
@@ -39,6 +43,8 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
         y: 0,
         rawX: 0,
         rawY: 0,
+        viewportWidth: viewport.width,
+        viewportHeight: viewport.height,
         calibrated: false,
       },
       focusScore: 0,
@@ -60,6 +66,8 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
       y: latest.gazeY,
       rawX: latest.rawGazeX,
       rawY: latest.rawGazeY,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
       calibrated: latest.isGazeCalibrated,
     },
     focusScore: latest.focusScore,

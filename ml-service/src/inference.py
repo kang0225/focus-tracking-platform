@@ -238,14 +238,34 @@ def _finite_float(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _percent_coordinate(value: float, extent: float) -> float:
+    return round(min(100.0, max(0.0, (value / extent) * 100.0)), 2)
+
+
 def _build_gaze_heatmap(dataframe: Any, columns: int = 16, rows: int = 10) -> dict[str, Any]:
-    valid_gaze = dataframe[
-        (dataframe["gazeMissing"] == 0)
-        & dataframe["gazeX"].notna()
-        & dataframe["gazeY"].notna()
-        & (dataframe["gazeX"] > 0)
-        & (dataframe["gazeY"] > 0)
-    ][["gazeX", "gazeY"]]
+    heatmap_data = dataframe.copy()
+    raw_gaze_mask = (
+        heatmap_data["rawGazeX"].notna()
+        & heatmap_data["rawGazeY"].notna()
+        & (heatmap_data["rawGazeX"] > 0)
+        & (heatmap_data["rawGazeY"] > 0)
+    )
+    heatmap_data["heatmapGazeX"] = heatmap_data["rawGazeX"].where(
+        raw_gaze_mask,
+        heatmap_data["gazeX"],
+    )
+    heatmap_data["heatmapGazeY"] = heatmap_data["rawGazeY"].where(
+        raw_gaze_mask,
+        heatmap_data["gazeY"],
+    )
+
+    valid_gaze = heatmap_data[
+        (heatmap_data["gazeMissing"] == 0)
+        & heatmap_data["heatmapGazeX"].notna()
+        & heatmap_data["heatmapGazeY"].notna()
+        & (heatmap_data["heatmapGazeX"] > 0)
+        & (heatmap_data["heatmapGazeY"] > 0)
+    ][["heatmapGazeX", "heatmapGazeY", "gazeViewportWidth", "gazeViewportHeight"]]
 
     if valid_gaze.empty:
         return {
@@ -259,56 +279,57 @@ def _build_gaze_heatmap(dataframe: Any, columns: int = 16, rows: int = 10) -> di
             "cells": [],
         }
 
-    x_min = float(valid_gaze["gazeX"].min())
-    x_max = float(valid_gaze["gazeX"].max())
-    y_min = float(valid_gaze["gazeY"].min())
-    y_max = float(valid_gaze["gazeY"].max())
-    x_span = max(x_max - x_min, 1.0)
-    y_span = max(y_max - y_min, 1.0)
-    has_x_spread = x_max > x_min
-    has_y_spread = y_max > y_min
+    viewport_widths = valid_gaze["gazeViewportWidth"].dropna()
+    viewport_widths = viewport_widths[viewport_widths > 0]
+    viewport_heights = valid_gaze["gazeViewportHeight"].dropna()
+    viewport_heights = viewport_heights[viewport_heights > 0]
+    x_extent = (
+        float(viewport_widths.max())
+        if not viewport_widths.empty
+        else max(float(valid_gaze["heatmapGazeX"].max()), 1.0)
+    )
+    y_extent = (
+        float(viewport_heights.max())
+        if not viewport_heights.empty
+        else max(float(valid_gaze["heatmapGazeY"].max()), 1.0)
+    )
 
-    counts: dict[tuple[int, int], int] = {}
+    buckets: dict[tuple[int, int], dict[str, float]] = {}
     for row in valid_gaze.itertuples(index=False):
-        x = _finite_float(row.gazeX)
-        y = _finite_float(row.gazeY)
+        x = _finite_float(row.heatmapGazeX)
+        y = _finite_float(row.heatmapGazeY)
         if x is None or y is None:
             continue
 
-        column_index = (
-            min(columns - 1, max(0, int(((x - x_min) / x_span) * columns)))
-            if has_x_spread
-            else columns // 2
-        )
-        row_index = (
-            min(rows - 1, max(0, int(((y - y_min) / y_span) * rows)))
-            if has_y_spread
-            else rows // 2
-        )
+        column_index = min(columns - 1, max(0, int((x / x_extent) * columns)))
+        row_index = min(rows - 1, max(0, int((y / y_extent) * rows)))
         key = (column_index, row_index)
-        counts[key] = counts.get(key, 0) + 1
+        bucket = buckets.setdefault(key, {"count": 0.0, "x_total": 0.0, "y_total": 0.0})
+        bucket["count"] += 1
+        bucket["x_total"] += x
+        bucket["y_total"] += y
 
-    max_count = max(counts.values()) if counts else 0
+    max_count = max((int(bucket["count"]) for bucket in buckets.values()), default=0)
     cells = [
         {
             "column": column_index,
             "row": row_index,
-            "x": round(((column_index + 0.5) / columns) * 100.0, 2),
-            "y": round(((row_index + 0.5) / rows) * 100.0, 2),
-            "count": count,
-            "intensity": round(count / max_count, 4) if max_count > 0 else 0.0,
+            "x": _percent_coordinate(bucket["x_total"] / bucket["count"], x_extent),
+            "y": _percent_coordinate(bucket["y_total"] / bucket["count"], y_extent),
+            "count": int(bucket["count"]),
+            "intensity": round(bucket["count"] / max_count, 4) if max_count > 0 else 0.0,
         }
-        for (column_index, row_index), count in sorted(counts.items())
+        for (column_index, row_index), bucket in sorted(buckets.items())
     ]
 
     return {
         "columns": columns,
         "rows": rows,
         "total_points": int(valid_gaze.shape[0]),
-        "x_min": round(x_min, 4),
-        "x_max": round(x_max, 4),
-        "y_min": round(y_min, 4),
-        "y_max": round(y_max, 4),
+        "x_min": 0.0,
+        "x_max": round(x_extent, 4),
+        "y_min": 0.0,
+        "y_max": round(y_extent, 4),
         "cells": cells,
     }
 

@@ -206,6 +206,8 @@ export interface TrackingStreamPayload {
     y: number;
     rawX?: number;
     rawY?: number;
+    viewportWidth?: number;
+    viewportHeight?: number;
     calibrated: boolean;
   };
   focusScore?: number;
