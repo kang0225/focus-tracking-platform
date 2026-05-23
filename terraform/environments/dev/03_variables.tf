@@ -132,6 +132,12 @@ variable "postgres_allocated_storage" {
   default     = 20
 }
 
+variable "max_allocated_storage" {
+  description = "Maximum RDS PostgreSQL storage size in GiB."
+  type        = number
+  default     = 20
+}
+
 variable "postgres_backup_retention_days" {
   description = "RDS PostgreSQL automated backup retention period in days."
   type        = number

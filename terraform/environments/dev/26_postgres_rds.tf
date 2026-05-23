@@ -31,6 +31,7 @@ resource "aws_db_instance" "postgres" {
   manage_master_user_password = true # RDS 마스터 비밀번호는 랜덤으로 만들고, Secrets Manager에 저장, RDS와 연결해서 관리
 
   allocated_storage = var.postgres_allocated_storage
+  max_allocated_storage = var.max_allocated_storage
   storage_type      = "gp3"
   storage_encrypted = true
 
