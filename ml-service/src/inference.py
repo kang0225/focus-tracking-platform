@@ -10,7 +10,6 @@ import redis.asyncio as redis
 
 from src.llm_feedback import generate_study_feedback
 from src.model import (
-    calculate_focus_score,
     classify_focus_state,
     classify_focus_trend,
     classify_heart_trend,
@@ -413,24 +412,13 @@ async def analyze_session(
         for minute_index, window in enumerate(windows, start=1):
             features = calculate_window_features(window, minute_index)
 
-            focus_score = calculate_focus_score(
-                features["heartRate_mean"],
-                window["rPPG"].to_numpy(dtype=float),
-            )
-            threshold = features["threshold"]
-
-            boolean_focus_ratio = _boolean_focus_ratio(window)
             raw_focus_score, raw_focus_threshold = _raw_focus_score(window)
-            if focus_score is None and boolean_focus_ratio is not None:
-                focus_score = boolean_focus_ratio * 100.0
-                threshold = 50.0
-            elif focus_score is None and raw_focus_score is not None:
-                focus_score = raw_focus_score
-                threshold = (
-                    raw_focus_threshold
-                    if raw_focus_threshold is not None
-                    else threshold
-                )
+            threshold = (
+                raw_focus_threshold
+                if raw_focus_threshold is not None
+                else features["threshold"]
+            )
+            focus_score = raw_focus_score
 
             focus_state = classify_focus_state(focus_score, threshold)
             focus_trend = classify_focus_trend(
