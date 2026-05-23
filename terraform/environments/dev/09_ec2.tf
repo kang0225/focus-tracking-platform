@@ -64,6 +64,7 @@ resource "aws_instance" "ml_ec2" {
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
+    encrypted = true
   }
 
   # ★ Docker 컨테이너 안에서 IMDSv2로 IAM 자격증명 가져오려면 hop limit 2 필요
