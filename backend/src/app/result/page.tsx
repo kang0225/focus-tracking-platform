@@ -290,6 +290,9 @@ function ResultContent() {
   const bpmStatusColor = avgBpm < 60 ? 'text-blue-400' : avgBpm > 100 ? 'text-red-400' : 'text-emerald-400';
   const sessionId = `${time}-${focusRatio}-${avgBpm}`;
   const isWaitingForJob = !!jobId && jobStatus !== 'completed' && jobStatus !== 'failed';
+  const hasCompletedJobResult = !!jobId && jobStatus === 'completed' && !!jobResult;
+  const hasLegacyQueryResult = !jobId && (time > 0 || focusRatio > 0 || avgBpm > 0);
+  const shouldShowReport = hasCompletedJobResult || hasLegacyQueryResult;
   const coachFeedbackSourceLabel = jobResult?.feedbackSource === 'bedrock'
     ? 'LLM 피드백'
     : '생성 안 됨';
@@ -337,6 +340,7 @@ function ResultContent() {
   }, [jobId]);
 
   useEffect(() => {
+    if (!shouldShowReport) return;
     if (time <= 0 && focusRatio <= 0 && avgBpm <= 0) return;
 
     const record: StudySessionRecord = {
@@ -360,7 +364,7 @@ function ResultContent() {
     ].slice(0, 30);
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSessions));
-  }, [avgBpm, focusRatio, sessionId, time]);
+  }, [avgBpm, focusRatio, sessionId, shouldShowReport, time]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
@@ -414,7 +418,16 @@ function ResultContent() {
           </div>
         )}
 
-        {!isWaitingForJob && (
+        {!isWaitingForJob && !shouldShowReport && (
+          <div className="rounded-2xl bg-slate-900/70 p-10 text-center ring-1 ring-slate-600/50">
+            <p className="text-2xl font-bold text-white">분석할 유효한 학습 데이터가 없습니다.</p>
+            <p className="mt-3 text-sm text-slate-400">
+              카메라와 rPPG 집중도 측정이 활성화된 상태에서 세션을 진행한 뒤 다시 결과를 확인해주세요.
+            </p>
+          </div>
+        )}
+
+        {shouldShowReport && (
           <>
         {/* 핵심 지표 3개 */}
         <div className="mb-12 grid gap-6 lg:grid-cols-3">

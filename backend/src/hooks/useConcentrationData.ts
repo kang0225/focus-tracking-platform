@@ -189,12 +189,17 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35)
     : 0;
   const fallbackFocusScore = Math.max(0, Math.min(100, Math.round((hasGaze ? 62 : 18) + heartRateStability)));
+  const rawFocusScore = paused
+    ? null
+    : hasAppleWatchFocusScore
+    ? watchFocusScore ?? null
+    : rppgFocusRawScore;
   const normalizedFocusScore = paused
     ? 0
     : hasAppleWatchFocusScore
     ? watchFocusScore ?? fallbackFocusScore
     : rppgFocusScore ?? fallbackFocusScore;
-  const focusScore = paused ? 0 : hasAppleWatchFocusScore ? watchFocusScore ?? 0 : (rppgFocusRawScore ?? 0);
+  const focusScore = rawFocusScore ?? 0;
   const focusThresholdRawScore = paused
     ? 0
     : hasAppleWatchFocusScore
@@ -210,6 +215,13 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     )
     : rppgFocusMetrics?.isFocused ?? null;
   const focusSource = paused ? 'paused' : hasAppleWatchFocusScore ? 'Apple Watch' : 'FacePhys Camera';
+  const hasFocusMeasurement = rawFocusScore != null
+    && Number.isFinite(rawFocusScore)
+    && rawFocusScore !== 0
+    && (focusThresholdRawScore != null || focusIsFocused != null);
+  const isTrackingReady = !paused
+    && hasFocusMeasurement
+    && (hasAppleWatchData || hasGaze || hasHeartRate || isHeartRateMeasuring);
 
   return {
     rawCoordinates: outputRawCoordinates,
@@ -230,10 +242,11 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     focusScore,
     focusIsFocused,
     normalizedFocusScore,
-    focusRawScore: paused ? 0 : hasAppleWatchFocusScore ? watchFocusScore ?? null : rppgFocusRawScore,
+    focusRawScore: rawFocusScore,
     focusThresholdRawScore,
     focusSource,
     focusMetrics: paused || hasAppleWatchFocusScore ? null : rppgFocusMetrics,
+    isTrackingReady,
     scriptsLoaded,
   };
 }

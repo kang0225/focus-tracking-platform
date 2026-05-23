@@ -16,6 +16,7 @@ interface TrackingStreamData {
   focusScore?: number;
   focusIsFocused?: boolean | null;
   focusThresholdRawScore?: number | null;
+  isTrackingReady: boolean;
   page: 'solo' | 'room';
 }
 
@@ -77,6 +78,23 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
   };
 }
 
+function finiteNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isPublishableSample(latest: TrackingStreamData, paused: boolean) {
+  if (paused || !latest.isTrackingReady) return false;
+
+  const hasFocusScore = finiteNumber(latest.focusScore) && latest.focusScore !== 0;
+  const hasFocusDecision = finiteNumber(latest.focusThresholdRawScore) || latest.focusIsFocused != null;
+  const hasHeartRate = latest.heartRate >= 40 && latest.heartRate <= 180;
+  const hasGaze = latest.isGazeCalibrated
+    && latest.gazeX > 0
+    && latest.gazeY > 0;
+
+  return hasFocusScore && hasFocusDecision && (hasHeartRate || hasGaze);
+}
+
 export function useTrackingStreamPublisher({ enabled = true, paused = false, data }: UseTrackingStreamPublisherOptions) {
   const dataRef = useRef(data);
   const pausedRef = useRef(paused);
@@ -105,8 +123,8 @@ export function useTrackingStreamPublisher({ enabled = true, paused = false, dat
   }, []);
 
   const canPublish = useMemo(() => (
-    enabled && data.meetingId.length > 0 && data.userId.length > 0
-  ), [data.meetingId.length, data.userId.length, enabled]);
+    enabled && !paused && data.isTrackingReady && data.meetingId.length > 0 && data.userId.length > 0
+  ), [data.isTrackingReady, data.meetingId.length, data.userId.length, enabled, paused]);
 
   useEffect(() => {
     if (!canPublish || stoppedRef.current) return undefined;
@@ -114,9 +132,11 @@ export function useTrackingStreamPublisher({ enabled = true, paused = false, dat
     const publish = async () => {
       if (stoppedRef.current) return;
       if (requestInFlightRef.current) return;
-      requestInFlightRef.current = true;
 
       const latest = dataRef.current;
+      if (!isPublishableSample(latest, pausedRef.current)) return;
+
+      requestInFlightRef.current = true;
       try {
         await fetch('/api/tracking/stream', {
           method: 'POST',

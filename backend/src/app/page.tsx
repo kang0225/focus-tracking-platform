@@ -51,6 +51,7 @@ export default function HomePage() {
     focusIsFocused,
     focusThresholdRawScore,
     focusSource,
+    isTrackingReady,
   } = useConcentrationData({ paused: isPaused });
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && (heartRate > 0 || isHeartRateMeasuring));
   const focusDisplayScore = formatMetric(focusRawScore);
@@ -58,7 +59,7 @@ export default function HomePage() {
   const focusStatus = isPaused ? '일시정지' : focusIsFocused == null ? '판정 대기' : focusIsFocused ? '집중 중' : '집중 저하';
 
   const { stopPublishing } = useTrackingStreamPublisher({
-    enabled: isLoaded,
+    enabled: isLoaded && isTrackingReady,
     paused: isPaused,
     data: {
       meetingId: soloMeetingId,
@@ -74,6 +75,7 @@ export default function HomePage() {
       focusScore: focusRawScore ?? undefined,
       focusIsFocused,
       focusThresholdRawScore,
+      isTrackingReady,
       page: 'solo',
     },
   });

@@ -148,6 +148,15 @@ def preprocess_tracking_data(raw_records: list[dict[str, Any]]) -> pd.DataFrame:
     if df.empty:
         raise ValueError("No records remain after pause-row filtering.")
 
+    valid_focus_mask = (
+        df["focusScore"].notna()
+        & np.isfinite(df["focusScore"])
+        & (df["focusScore"] != 0)
+    )
+    df = df[valid_focus_mask].copy()
+    if df.empty:
+        raise ValueError("No valid focus score records remain after filtering.")
+
     df["gazeMissing"] = ((df["gazeX"] == 0) & (df["gazeY"] == 0)).astype(int)
     df = df.sort_values("timestamp").reset_index(drop=True)
 
