@@ -19,10 +19,16 @@ function makeTrackingId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+function formatMetric(value: number | null | undefined, digits = 3) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return Number.isInteger(value) ? String(value) : value.toFixed(digits);
+}
+
 export default function HomePage() {
   const router = useRouter();
   const createTrackingAnalysisJob = useTrackingAnalysisJob();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const soloMeetingId = useMemo(() => makeTrackingId('solo'), []);
   const soloUserId = useMemo(() => makeTrackingId('user'), []);
   const {
@@ -44,12 +50,16 @@ export default function HomePage() {
     focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
-  } = useConcentrationData();
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0 || isHeartRateMeasuring);
-  const focusDisplayScore = focusRawScore != null ? focusRawScore.toFixed(3) : '--';
+    focusSource,
+  } = useConcentrationData({ paused: isPaused });
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && (heartRate > 0 || isHeartRateMeasuring));
+  const focusDisplayScore = formatMetric(focusRawScore);
+  const focusThresholdDisplay = formatMetric(focusThresholdRawScore);
+  const focusStatus = isPaused ? '일시정지' : focusIsFocused == null ? '판정 대기' : focusIsFocused ? '집중 중' : '집중 저하';
 
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: isLoaded,
+    paused: isPaused,
     data: {
       meetingId: soloMeetingId,
       userId: soloUserId,
@@ -114,6 +124,18 @@ export default function HomePage() {
             >
               Apple Watch Sync
             </button>
+            <button
+              type="button"
+              onClick={() => setIsPaused((current) => !current)}
+              disabled={isFinishing}
+              className={`rounded-lg px-6 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                isPaused
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500'
+                  : 'border border-amber-500/50 text-amber-100 hover:border-amber-400 hover:bg-amber-500/10'
+              }`}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
           </div>
         </header>
 
@@ -124,15 +146,15 @@ export default function HomePage() {
 
               <div className="absolute right-6 top-6 w-52 space-y-2">
                 <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
-                  <p className="text-[10px] uppercase text-slate-400">{heartRateSource}</p>
+                  <p className="text-[10px] uppercase text-slate-400">{isPaused ? 'Paused' : heartRateSource}</p>
                   <p className="text-3xl font-bold text-red-400">{heartRate > 0 ? heartRate : '--'}</p>
                   <p className="text-[10px] text-slate-500">{heartRateStatus}</p>
                 </div>
                 <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-emerald-500/30">
-                  <p className="text-[10px] uppercase text-slate-400">rPPG 집중도 원점수</p>
+                  <p className="text-[10px] uppercase text-slate-400">{focusSource} 집중 점수</p>
                   <p className="text-3xl font-bold text-emerald-300">{focusDisplayScore}</p>
                   <p className="text-[10px] text-slate-500">
-                    {focusRawScore != null ? 'PPI 기반 판정 중' : 'PPI 수집 중'}
+                    Threshold {focusThresholdDisplay} · {focusStatus}
                   </p>
                 </div>
                 <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
@@ -142,17 +164,17 @@ export default function HomePage() {
           </div>
 
           <aside className="space-y-4">
-            <StatusCard label="Camera" status="Active" isActive={true} colorClass="emerald" />
+            <StatusCard label="Camera" status={isPaused ? 'Paused' : 'Active'} isActive={!isPaused} colorClass="emerald" />
             <StatusCard
               label={`Heart Rate (${heartRateSource})`}
               status={heartRateStatus}
-              isActive={heartRate > 0 || isHeartRateMeasuring}
+              isActive={!isPaused && (heartRate > 0 || isHeartRateMeasuring)}
               colorClass="red"
             />
             <StatusCard
               label="Gaze Tracking"
-              status={!isLoaded ? 'Loading' : isCalibrated ? 'Calibrated' : 'Calibration required'}
-              isActive={isLoaded && isCalibrated}
+              status={isPaused ? 'Paused' : !isLoaded ? 'Loading' : isCalibrated ? 'Calibrated' : 'Calibration required'}
+              isActive={!isPaused && isLoaded && isCalibrated}
               colorClass="blue"
             />
 
@@ -169,10 +191,10 @@ export default function HomePage() {
       <GazeDot
         x={rawCoordinates.x}
         y={rawCoordinates.y}
-        visible={isLoaded && isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
+        visible={!isPaused && isLoaded && isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
       />
       <GazeCalibrationOverlay
-        active={isLoaded && !isCalibrated}
+        active={!isPaused && isLoaded && !isCalibrated}
         currentPointIndex={currentCalibrationPointIndex}
         pointClickCount={calibrationPointClickCount}
         clicksPerPoint={clicksPerCalibrationPoint}

@@ -7,12 +7,16 @@ import {
   SignalMessage,
   SignalType,
 } from '../types/tracker';
-export const pairingCodes = new Map<string, PairingData>();
-let _currentPairing: PairingData | null = null;
+const globalStore = globalThis as typeof globalThis & {
+  __focusPairingCodes?: Map<string, PairingData>;
+  __focusCurrentPairing?: PairingData | null;
+};
 
-export const getCurrentPairing = () => _currentPairing;
+export const pairingCodes = globalStore.__focusPairingCodes ??= new Map<string, PairingData>();
+
+export const getCurrentPairing = () => globalStore.__focusCurrentPairing ?? null;
 export const setCurrentPairing = (pairing: PairingData | null) => {
-  _currentPairing = pairing;
+  globalStore.__focusCurrentPairing = pairing;
 };
 
 const ROOM_CAPACITY = 5;
@@ -35,6 +39,7 @@ const emptyMetrics = (): FocusMetrics => ({
   heartRate: 0,
   heartRateSource: '대기 중',
   focusScore: 0,
+  focusThreshold: null,
   focusIsFocused: null,
   updatedAt: Date.now(),
 });

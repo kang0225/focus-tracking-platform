@@ -21,6 +21,11 @@ interface StreamVideoProps {
   videoId?: string;
 }
 
+function formatMetric(value: number | null | undefined, digits = 3) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return Number.isInteger(value) ? String(value) : value.toFixed(digits);
+}
+
 function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled, videoId }: StreamVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -77,10 +82,14 @@ function ParticipantMetric({ participant, isMe }: { participant: RoomParticipant
         </div>
         <span className={`h-2.5 w-2.5 rounded-full ${isFresh ? 'bg-emerald-400' : 'bg-slate-600'}`} />
       </div>
-      <div className="grid grid-cols-4 gap-3 text-center">
+      <div className="grid grid-cols-5 gap-3 text-center">
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
           <p className="text-lg font-bold text-emerald-300">{metrics.focusScore > 0 ? metrics.focusScore.toFixed(3) : '--'}</p>
-          <p className="text-[11px] uppercase text-slate-500">Raw</p>
+          <p className="text-[11px] uppercase text-slate-500">Score</p>
+        </div>
+        <div className="rounded-md bg-slate-950/80 px-2 py-3">
+          <p className="text-lg font-bold text-cyan-200">{formatMetric(metrics.focusThreshold)}</p>
+          <p className="text-[11px] uppercase text-slate-500">Limit</p>
         </div>
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
           <p className="text-lg font-bold text-cyan-300">{metrics.gazeX}</p>
@@ -104,6 +113,7 @@ export default function VideoRoomPage() {
   const createTrackingAnalysisJob = useTrackingAnalysisJob();
   const [name, setName] = useState('');
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
   const {
@@ -125,17 +135,19 @@ export default function VideoRoomPage() {
     focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
-  } = useConcentrationData();
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, heartRate > 0);
+    focusSource,
+  } = useConcentrationData({ paused: isPaused });
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
     gazeX: coordinates.x,
     gazeY: coordinates.y,
     heartRate,
     heartRateSource,
     focusScore,
+    focusThreshold: focusThresholdRawScore,
     focusIsFocused,
     updatedAt: Date.now(),
-  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, heartRate, heartRateSource]);
+  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, focusThresholdRawScore, heartRate, heartRateSource]);
 
   const {
     clientId,
@@ -156,6 +168,7 @@ export default function VideoRoomPage() {
 
   const { stopPublishing } = useTrackingStreamPublisher({
     enabled: !!room?.roomId,
+    paused: isPaused,
     data: {
       meetingId: room?.roomId ?? '',
       userId: clientId,
@@ -241,6 +254,18 @@ export default function VideoRoomPage() {
               {isVideoEnabled ? '카메라 끄기' : '카메라 켜기'}
             </button>
             <button
+              type="button"
+              onClick={() => setIsPaused((current) => !current)}
+              disabled={isLeaving}
+              className={`h-10 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                isPaused
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                  : 'border border-amber-500/50 text-amber-100 hover:border-amber-400 hover:bg-amber-500/10'
+              }`}
+            >
+              {isPaused ? '측정 재개' : '측정 일시정지'}
+            </button>
+            <button
               onClick={() => void leaveAndAnalyze()}
               disabled={isLeaving}
               className="h-10 rounded-md border border-rose-500/50 px-4 text-sm font-semibold text-rose-100 transition hover:border-rose-400 hover:bg-rose-500/10"
@@ -296,7 +321,7 @@ export default function VideoRoomPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-300 ring-1 ring-slate-800">
-                    {!isLoaded ? '시선 추적 로딩 중' : isCalibrated ? '시선 보정 완료' : '시선 보정 필요'}
+                    {isPaused ? '측정 일시정지 중' : !isLoaded ? '시선 추적 로딩 중' : isCalibrated ? '시선 보정 완료' : '시선 보정 필요'}
                   </div>
                   <button
                     type="button"
@@ -314,10 +339,14 @@ export default function VideoRoomPage() {
           <aside className="space-y-4">
             <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-4">
               <p className="text-sm font-semibold text-white">내 집중도</p>
-              <div className="mt-4 grid grid-cols-4 gap-3 text-center">
+              <div className="mt-4 grid grid-cols-5 gap-3 text-center">
                 <div className="rounded-md bg-slate-950 px-2 py-3">
-                  <p className="text-xl font-bold text-emerald-300">{focusScore > 0 ? focusScore.toFixed(3) : '--'}</p>
-                  <p className="text-[11px] text-slate-500">Raw</p>
+                  <p className="text-xl font-bold text-emerald-300">{formatMetric(focusRawScore)}</p>
+                  <p className="text-[11px] text-slate-500">Score</p>
+                </div>
+                <div className="rounded-md bg-slate-950 px-2 py-3">
+                  <p className="text-xl font-bold text-cyan-200">{formatMetric(focusThresholdRawScore)}</p>
+                  <p className="text-[11px] text-slate-500">Limit</p>
                 </div>
                 <div className="rounded-md bg-slate-950 px-2 py-3">
                   <p className="text-xl font-bold text-cyan-300">{coordinates.x}</p>
@@ -332,6 +361,7 @@ export default function VideoRoomPage() {
                   <p className="text-[11px] text-slate-500">{heartRate > 0 ? heartRateSource : heartRateStatus}</p>
                 </div>
               </div>
+              <p className="mt-2 text-xs text-slate-500">집중 점수 출처: {isPaused ? '일시정지' : focusSource}</p>
             </div>
 
             <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
@@ -352,10 +382,10 @@ export default function VideoRoomPage() {
       <GazeDot
         x={rawCoordinates.x}
         y={rawCoordinates.y}
-        visible={isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
+        visible={!isPaused && isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
       />
       <GazeCalibrationOverlay
-        active={isLoaded && !isCalibrated}
+        active={!isPaused && isLoaded && !isCalibrated}
         currentPointIndex={currentCalibrationPointIndex}
         pointClickCount={calibrationPointClickCount}
         clicksPerPoint={clicksPerCalibrationPoint}

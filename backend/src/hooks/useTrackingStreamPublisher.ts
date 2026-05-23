@@ -21,11 +21,57 @@ interface TrackingStreamData {
 
 interface UseTrackingStreamPublisherOptions {
   enabled?: boolean;
+  paused?: boolean;
   data: TrackingStreamData;
 }
 
-export function useTrackingStreamPublisher({ enabled = true, data }: UseTrackingStreamPublisherOptions) {
+function buildPayload(latest: TrackingStreamData, paused: boolean) {
+  if (paused) {
+    return {
+      meetingId: latest.meetingId,
+      userId: latest.userId,
+      timestamp: new Date().toISOString(),
+      heartRate: 0,
+      heartRateSource: 'paused',
+      heartRateStatus: '일시정지',
+      gaze: {
+        x: 0,
+        y: 0,
+        rawX: 0,
+        rawY: 0,
+        calibrated: false,
+      },
+      focusScore: 0,
+      focusIsFocused: null,
+      focusThresholdRawScore: 0,
+      page: latest.page,
+    };
+  }
+
+  return {
+    meetingId: latest.meetingId,
+    userId: latest.userId,
+    timestamp: new Date().toISOString(),
+    heartRate: latest.heartRate,
+    heartRateSource: latest.heartRateSource,
+    heartRateStatus: latest.heartRateStatus,
+    gaze: {
+      x: latest.gazeX,
+      y: latest.gazeY,
+      rawX: latest.rawGazeX,
+      rawY: latest.rawGazeY,
+      calibrated: latest.isGazeCalibrated,
+    },
+    focusScore: latest.focusScore,
+    focusIsFocused: latest.focusIsFocused,
+    focusThresholdRawScore: latest.focusThresholdRawScore,
+    page: latest.page,
+  };
+}
+
+export function useTrackingStreamPublisher({ enabled = true, paused = false, data }: UseTrackingStreamPublisherOptions) {
   const dataRef = useRef(data);
+  const pausedRef = useRef(paused);
   const requestInFlightRef = useRef(false);
   const stoppedRef = useRef(false);
   const intervalRef = useRef<number | null>(null);
@@ -33,6 +79,10 @@ export function useTrackingStreamPublisher({ enabled = true, data }: UseTracking
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     if (enabled) stoppedRef.current = false;
@@ -63,25 +113,7 @@ export function useTrackingStreamPublisher({ enabled = true, data }: UseTracking
         await fetch('/api/tracking/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            meetingId: latest.meetingId,
-            userId: latest.userId,
-            timestamp: new Date().toISOString(),
-            heartRate: latest.heartRate,
-            heartRateSource: latest.heartRateSource,
-            heartRateStatus: latest.heartRateStatus,
-            gaze: {
-              x: latest.gazeX,
-              y: latest.gazeY,
-              rawX: latest.rawGazeX,
-              rawY: latest.rawGazeY,
-              calibrated: latest.isGazeCalibrated,
-            },
-            focusScore: latest.focusScore,
-            focusIsFocused: latest.focusIsFocused,
-            focusThresholdRawScore: latest.focusThresholdRawScore,
-            page: latest.page,
-          }),
+          body: JSON.stringify(buildPayload(latest, pausedRef.current)),
           keepalive: true,
         });
       } catch (error) {

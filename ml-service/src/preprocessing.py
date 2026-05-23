@@ -18,7 +18,7 @@ from src.params import (
 
 
 REQUIRED_COLUMNS = ("timestamp", "gazeX", "gazeY")
-NUMERIC_COLUMNS = ("gazeX", "gazeY", "heartRate", "rPPG", "threshold")
+NUMERIC_COLUMNS = ("gazeX", "gazeY", "heartRate", "rPPG", "threshold", "focusScore")
 
 
 def _finite_or_none(value: Any) -> float | None:
@@ -91,6 +91,19 @@ def preprocess_tracking_data(raw_records: list[dict[str, Any]]) -> pd.DataFrame:
 
     if df.empty:
         raise ValueError("No records remain after timestamp validation.")
+
+    pause_optional_columns = [column for column in ("focusScore", "threshold", "rPPG") if column in df.columns]
+    pause_mask = (
+        (df["heartRate"].fillna(0) == 0)
+        & (df["gazeX"].fillna(0) == 0)
+        & (df["gazeY"].fillna(0) == 0)
+    )
+    for column in pause_optional_columns:
+        pause_mask = pause_mask & (df[column].fillna(0) == 0)
+
+    df = df[~pause_mask].copy()
+    if df.empty:
+        raise ValueError("No records remain after pause-row filtering.")
 
     df["gazeMissing"] = ((df["gazeX"] == 0) & (df["gazeY"] == 0)).astype(int)
     df = df.sort_values("timestamp").reset_index(drop=True)

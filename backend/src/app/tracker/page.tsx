@@ -9,6 +9,11 @@ import { isRppgMeasuringStatus, useRPPG } from '../../hooks/useRPPG';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useRollingHeartRateAverage } from '@/hooks/useRollingHeartRateAverage';
 
+function formatMetric(value: number | null | undefined, digits = 3) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return Number.isInteger(value) ? String(value) : value.toFixed(digits);
+}
+
 export default function TrackerPage() {
   const router = useRouter();
   const [code, setCode] = useState<string>('');
@@ -16,12 +21,26 @@ export default function TrackerPage() {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('페어링 버튼을 눌러 6자리 코드를 생성하세요.');
   const isPaired = !!data && data.status === 'active';
-  const useRPPGMode = !isPaired || (isPaired && !data.appleWatchPaired);
+  const hasAppleWatchMetrics = isPaired
+    && (
+      data?.appleWatchPaired === true
+      || (data?.heartRate ?? 0) > 0
+      || typeof data?.focusScore === 'number'
+      || typeof data?.focusThreshold === 'number'
+    );
+  const useAppleWatchHeartRate = hasAppleWatchMetrics && (data?.heartRate ?? 0) > 0;
+  const useRPPGMode = !useAppleWatchHeartRate;
+  const focusIsFocused = data?.focusIsFocused ?? (
+    typeof data?.focusScore === 'number' && typeof data?.focusThreshold === 'number'
+      ? data.focusScore >= data.focusThreshold
+      : null
+  );
+  const focusStatus = focusIsFocused == null ? '판정 대기' : focusIsFocused ? '집중 중' : '집중 저하';
 
   // rPPG 훅 사용
   const { bpm, confidence, status: rppgStatus } = useRPPG('webgazerVideoFeed', useRPPGMode);
-  const rawDisplayedHeartRate = isPaired && data?.appleWatchPaired ? data.heartRate : bpm;
-  const heartRateAverageSource = isPaired && data?.appleWatchPaired ? 'Apple Watch' : 'FacePhys Camera';
+  const rawDisplayedHeartRate = useAppleWatchHeartRate ? data?.heartRate ?? 0 : bpm;
+  const heartRateAverageSource = useAppleWatchHeartRate ? 'Apple Watch' : 'FacePhys Camera';
   const displayedHeartRate = useRollingHeartRateAverage(rawDisplayedHeartRate, rawDisplayedHeartRate > 0, 10, heartRateAverageSource);
   const isRppgMeasuring = useRPPGMode && isRppgMeasuringStatus(rppgStatus);
   const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || isRppgMeasuring);
@@ -156,11 +175,24 @@ export default function TrackerPage() {
                 </div>
               )}
 
-              {isPaired && data.appleWatchPaired && (
+              {hasAppleWatchMetrics && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
                   <p className="font-semibold text-emerald-200">Apple Watch 연결 완료!</p>
-                  <p className="mt-2 text-3xl font-black text-white">{displayedHeartRate || '--'}</p>
-                  <p className="text-slate-400">현재 심박수 (Apple Watch)</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-xl bg-slate-950/70 px-2 py-3">
+                      <p className="text-2xl font-black text-white">{displayedHeartRate || '--'}</p>
+                      <p className="text-[10px] text-slate-400">bpm</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-950/70 px-2 py-3">
+                      <p className="text-2xl font-black text-emerald-200">{formatMetric(data?.focusScore)}</p>
+                      <p className="text-[10px] text-slate-400">Score</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-950/70 px-2 py-3">
+                      <p className="text-2xl font-black text-cyan-200">{formatMetric(data?.focusThreshold)}</p>
+                      <p className="text-[10px] text-slate-400">Threshold</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">집중 상태: {focusStatus}</p>
                 </div>
               )}
 
