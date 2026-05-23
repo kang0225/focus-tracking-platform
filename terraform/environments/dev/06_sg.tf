@@ -110,7 +110,7 @@ resource "aws_security_group_rule" "data_ingress_from_web" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.web_sg.id
   security_group_id        = aws_security_group.db_sg.id
-  description              = "Allow MySQL access from web EC2"
+  description              = "Allow PostgreSQL access from web EC2"
 }
 
 # 4. ML EC2 Rules

@@ -317,28 +317,6 @@ resource "aws_network_acl_rule" "private_db_out_to_app_c_ephemeral" {
   to_port        = 65535
 }
 
-resource "aws_network_acl_rule" "private_db_out_http" {
-  network_acl_id = aws_network_acl.private_db.id
-  rule_number    = 120
-  egress         = true
-  protocol       = "tcp"
-  rule_action    = "allow"
-  cidr_block     = "0.0.0.0/0"
-  from_port      = 80
-  to_port        = 80
-}
-
-resource "aws_network_acl_rule" "private_db_out_https" {
-  network_acl_id = aws_network_acl.private_db.id
-  rule_number    = 130
-  egress         = true
-  protocol       = "tcp"
-  rule_action    = "allow"
-  cidr_block     = "0.0.0.0/0"
-  from_port      = 443
-  to_port        = 443
-}
-
 #######################
 ### NACL과 서브넷 연결 ###
 #######################

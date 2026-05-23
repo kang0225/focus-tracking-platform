@@ -106,9 +106,9 @@ resource "aws_ecs_task_definition" "app" {
 
   # ★ CI/CD가 새 이미지로 task definition revision을 등록할 때
   #   Terraform이 다시 :latest로 되돌리지 않게 무시
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+  #lifecycle {
+  #  ignore_changes = [container_definitions]
+  #}
 
   tags = {
     Name = "${var.project_name}-${var.environment}-task"

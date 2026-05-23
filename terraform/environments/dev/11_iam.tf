@@ -63,24 +63,6 @@ resource "aws_iam_instance_profile" "web_ec2_profile" {
 }
 
 ################################
-### DB 서버 역할 (DB EC2 Role) ###
-################################
-resource "aws_iam_role" "db_ec2_role" {
-  name               = "${var.project_name}-${var.environment}-db-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
-}
-
-resource "aws_iam_role_policy_attachment" "db_ec2_ssm" {
-  role       = aws_iam_role.db_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "db_ec2_profile" {
-  name = aws_iam_role.db_ec2_role.name
-  role = aws_iam_role.db_ec2_role.name
-}
-
-################################
 ### ML 서버 역할 (ML EC2 Role) ###
 ################################
 
