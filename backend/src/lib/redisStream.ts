@@ -211,6 +211,7 @@ export interface TrackingStreamPayload {
     calibrated: boolean;
   };
   focusScore?: number;
+  focusSource?: string;
   focusIsFocused?: boolean | null;
   focusThresholdRawScore?: number | null;
   page?: 'solo' | 'room';

@@ -20,6 +20,7 @@ export interface FocusMetrics {
   heartRate: number;
   heartRateSource: string;
   focusScore: number;
+  focusSource?: string;
   focusThreshold?: number | null;
   focusIsFocused?: boolean | null;
   updatedAt: number;

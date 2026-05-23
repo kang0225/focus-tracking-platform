@@ -21,15 +21,14 @@ export default function TrackerPage() {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('페어링 버튼을 눌러 6자리 코드를 생성하세요.');
   const isPaired = !!data && data.status === 'active';
-  const hasAppleWatchMetrics = isPaired
+  const hasAppleWatchValues = isPaired
     && (
-      data?.appleWatchPaired === true
-      || (data?.heartRate ?? 0) > 0
+      (data?.heartRate ?? 0) > 0
       || typeof data?.focusScore === 'number'
       || typeof data?.focusThreshold === 'number'
-    );
-  const useAppleWatchHeartRate = hasAppleWatchMetrics && (data?.heartRate ?? 0) > 0;
-  const useRPPGMode = !useAppleWatchHeartRate;
+  );
+  const hasAppleWatchConnection = isPaired && (data?.appleWatchPaired === true || hasAppleWatchValues);
+  const useRPPGMode = !hasAppleWatchValues;
   const focusIsFocused = data?.focusIsFocused ?? (
     typeof data?.focusScore === 'number' && typeof data?.focusThreshold === 'number'
       ? data.focusScore >= data.focusThreshold
@@ -39,8 +38,8 @@ export default function TrackerPage() {
 
   // rPPG 훅 사용
   const { bpm, confidence, status: rppgStatus } = useRPPG('webgazerVideoFeed', useRPPGMode);
-  const rawDisplayedHeartRate = useAppleWatchHeartRate ? data?.heartRate ?? 0 : bpm;
-  const heartRateAverageSource = useAppleWatchHeartRate ? 'Apple Watch' : 'FacePhys Camera';
+  const rawDisplayedHeartRate = hasAppleWatchValues ? data?.heartRate ?? 0 : bpm;
+  const heartRateAverageSource = hasAppleWatchValues ? 'Apple Watch' : 'FacePhys Camera';
   const displayedHeartRate = useRollingHeartRateAverage(rawDisplayedHeartRate, rawDisplayedHeartRate > 0, 10, heartRateAverageSource);
   const isRppgMeasuring = useRPPGMode && isRppgMeasuringStatus(rppgStatus);
   const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || isRppgMeasuring);
@@ -175,7 +174,14 @@ export default function TrackerPage() {
                 </div>
               )}
 
-              {hasAppleWatchMetrics && (
+              {hasAppleWatchConnection && !hasAppleWatchValues && (
+                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
+                  <p className="font-semibold text-emerald-200">Apple Watch 연결됨</p>
+                  <p className="mt-1 text-slate-400">심박수와 집중 점수를 기다리는 중입니다.</p>
+                </div>
+              )}
+
+              {hasAppleWatchValues && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
                   <p className="font-semibold text-emerald-200">Apple Watch 연결 완료!</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
