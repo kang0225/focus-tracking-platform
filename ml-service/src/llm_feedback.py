@@ -152,6 +152,17 @@ def _extract_response_text(payload: dict[str, Any]) -> str | None:
     return "\n".join(parts).strip() or None
 
 
+def _sanitize_feedback_text(text: str) -> str:
+    lines = text.strip().splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+
+    while len(lines) > 1 and lines[0].lstrip().startswith("#"):
+        lines.pop(0)
+
+    return "\n".join(line.strip() for line in lines).strip()
+
+
 def _build_bedrock_prompt(prompt_payload: dict[str, Any]) -> str:
     return (
         "다음 JSON은 한 학습 세션의 1분 단위 분석 결과입니다. "
@@ -185,7 +196,9 @@ def _invoke_bedrock_feedback(prompt_payload: dict[str, Any]) -> str | None:
             "You are a Korean study coach. Use the minute-by-minute focus, "
             "heart-rate, rPPG, and gaze-missing analysis to give practical "
             "study habit feedback. Do not make medical claims. Return only "
-            "the final Korean feedback string, 4 to 6 concise sentences."
+            "plain Korean feedback, 5 to 7 concise sentences. Do not include "
+            "a title, Markdown, headings, bullet points, numbering, labels, "
+            "or code blocks. Start directly with the first feedback sentence."
         ),
         "messages": [
             {
@@ -233,7 +246,7 @@ async def generate_study_feedback(
     try:
         text = await asyncio.to_thread(_invoke_bedrock_feedback, prompt_payload)
         if text:
-            return local_feedback, text, "bedrock"
+            return local_feedback, _sanitize_feedback_text(text), "bedrock"
     except Exception as exc:
         print(f"Bedrock feedback generation failed: {exc}")
 
