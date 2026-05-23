@@ -17,6 +17,9 @@ const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 };
 
+const ROOM_MISSING_RESPONSE_LIMIT = 3;
+const ROOM_EXPIRED_MESSAGE = '방 연결이 만료되었습니다. 다시 입장해주세요.';
+
 const makeClientId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -64,6 +67,7 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
   const lastSignalIdRef = useRef(0);
   const handledSignalsRef = useRef(new Set<number>());
   const offeredPeersRef = useRef(new Set<string>());
+  const missingRoomResponsesRef = useRef(0);
 
   useEffect(() => {
     roomRef.current = room;
@@ -328,6 +332,22 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
     setRoom(null);
   }, [clientId]);
 
+  const markRoomSeen = useCallback(() => {
+    missingRoomResponsesRef.current = 0;
+    setError((current) => (current === ROOM_EXPIRED_MESSAGE ? null : current));
+  }, []);
+
+  const markRoomMissing = useCallback(() => {
+    missingRoomResponsesRef.current += 1;
+    if (missingRoomResponsesRef.current >= ROOM_MISSING_RESPONSE_LIMIT) {
+      setError(ROOM_EXPIRED_MESSAGE);
+      setStatus('방 연결 만료');
+      return;
+    }
+
+    setStatus('방 연결 상태를 재확인하는 중입니다.');
+  }, []);
+
   useEffect(() => {
     if (!room) return;
     reconcilePeers(room.participants);
@@ -350,13 +370,13 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
           }),
         });
         if (res.status === 404) {
-          setError('방 연결이 만료되었습니다. 다시 입장해주세요.');
-          setStatus('방 연결 만료');
+          markRoomMissing();
           return;
         }
         if (!res.ok) return;
 
         const snapshot: RoomSnapshot = await res.json();
+        markRoomSeen();
         setRoom(snapshot);
         setStatus(snapshot.participants.length >= snapshot.maxParticipants ? '방이 가득 찼습니다.' : '랜덤 참가자를 기다리는 중입니다.');
       } catch {
@@ -365,7 +385,7 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
     }, 1500);
 
     return () => window.clearInterval(interval);
-  }, [clientId, roomId]);
+  }, [clientId, markRoomMissing, markRoomSeen, roomId]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -378,9 +398,14 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
           after: String(lastSignalIdRef.current),
         });
         const res = await fetch(`/api/rooms/events?${params.toString()}`);
+        if (res.status === 404) {
+          markRoomMissing();
+          return;
+        }
         if (!res.ok) return;
 
         const data: { room: RoomSnapshot; signals: SignalMessage[] } = await res.json();
+        markRoomSeen();
         setRoom(data.room);
         for (const signal of data.signals) {
           await handleSignal(signal);
@@ -391,7 +416,7 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
     }, 700);
 
     return () => window.clearInterval(interval);
-  }, [clientId, handleSignal, roomId]);
+  }, [clientId, handleSignal, markRoomMissing, markRoomSeen, roomId]);
 
   useEffect(() => {
     const leaveWithKeepalive = () => {

@@ -16,7 +16,7 @@ export const setCurrentPairing = (pairing: PairingData | null) => {
 };
 
 const ROOM_CAPACITY = 5;
-const PARTICIPANT_TTL_MS = 30_000;
+const PARTICIPANT_TTL_MS = 120_000;
 const SIGNAL_TTL_MS = 60_000;
 
 interface VideoRoom {

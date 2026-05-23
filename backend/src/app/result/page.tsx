@@ -552,7 +552,7 @@ function ResultContent() {
         {jobResult?.feedback && (
           <div className="mt-6 rounded-2xl bg-emerald-900/20 p-8 ring-1 ring-emerald-500/20 backdrop-blur-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">AI 학습 요약</h2>
+              <h2 className="text-lg font-semibold">학습 요약</h2>
               <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/20">
                 기본 분석 요약
               </span>
