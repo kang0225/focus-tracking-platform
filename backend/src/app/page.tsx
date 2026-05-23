@@ -73,6 +73,7 @@ export default function HomePage() {
       rawGazeY: rawCoordinates.y,
       isGazeCalibrated: isCalibrated,
       focusScore: focusRawScore ?? undefined,
+      focusSource,
       focusIsFocused,
       focusThresholdRawScore,
       isTrackingReady,

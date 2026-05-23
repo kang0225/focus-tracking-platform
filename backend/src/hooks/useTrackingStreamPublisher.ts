@@ -14,6 +14,7 @@ interface TrackingStreamData {
   rawGazeY?: number;
   isGazeCalibrated: boolean;
   focusScore?: number;
+  focusSource?: string;
   focusIsFocused?: boolean | null;
   focusThresholdRawScore?: number | null;
   isTrackingReady: boolean;
@@ -49,6 +50,7 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
         calibrated: false,
       },
       focusScore: 0,
+      focusSource: 'paused',
       focusIsFocused: null,
       focusThresholdRawScore: 0,
       page: latest.page,
@@ -72,6 +74,7 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
       calibrated: latest.isGazeCalibrated,
     },
     focusScore: latest.focusScore,
+    focusSource: latest.focusSource,
     focusIsFocused: latest.focusIsFocused,
     focusThresholdRawScore: latest.focusThresholdRawScore,
     page: latest.page,

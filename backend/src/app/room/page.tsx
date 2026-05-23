@@ -85,7 +85,7 @@ function ParticipantMetric({ participant, isMe }: { participant: RoomParticipant
       <div className="grid grid-cols-5 gap-3 text-center">
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
           <p className="text-lg font-bold text-emerald-300">{metrics.focusScore > 0 ? metrics.focusScore.toFixed(3) : '--'}</p>
-          <p className="text-[11px] uppercase text-slate-500">Score</p>
+          <p className="text-[11px] uppercase text-slate-500">{metrics.focusSource ?? 'Score'}</p>
         </div>
         <div className="rounded-md bg-slate-950/80 px-2 py-3">
           <p className="text-lg font-bold text-cyan-200">{formatMetric(metrics.focusThreshold)}</p>
@@ -145,10 +145,11 @@ export default function VideoRoomPage() {
     heartRate,
     heartRateSource,
     focusScore,
+    focusSource,
     focusThreshold: focusThresholdRawScore,
     focusIsFocused,
     updatedAt: Date.now(),
-  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, focusThresholdRawScore, heartRate, heartRateSource]);
+  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, focusSource, focusThresholdRawScore, heartRate, heartRateSource]);
 
   const {
     clientId,
@@ -182,6 +183,7 @@ export default function VideoRoomPage() {
       rawGazeY: rawCoordinates.y,
       isGazeCalibrated: isCalibrated,
       focusScore: focusRawScore ?? undefined,
+      focusSource,
       focusIsFocused,
       focusThresholdRawScore,
       isTrackingReady,

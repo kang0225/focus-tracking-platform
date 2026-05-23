@@ -37,8 +37,7 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
   const hasAppleWatchData = !!watchData
     && watchData.status === 'active'
     && (
-      watchData.appleWatchPaired === true
-      || watchHeartRate > 0
+      watchHeartRate > 0
       || watchFocusScore != null
       || watchFocusThreshold != null
     );
@@ -51,7 +50,7 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     focusScore: rppgFocusScore,
     focusRawScore: rppgFocusRawScore,
     focusMetrics: rppgFocusMetrics,
-  } = useRPPG('webgazerVideoFeed', !paused && !hasAppleWatchHeartRate);
+  } = useRPPG('webgazerVideoFeed', !paused && !hasAppleWatchData);
 
   useEffect(() => {
     const loadScripts = async () => {
@@ -161,19 +160,19 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
       } catch {
         setWatchData(null);
       }
-    }, 2000);
+    }, 1000);
 
     return () => window.clearInterval(interval);
   }, []);
 
-  const rawHeartRate = paused ? 0 : hasAppleWatchHeartRate ? watchHeartRate : webcamBpm;
-  const heartRateSource = paused ? 'paused' : hasAppleWatchHeartRate ? 'Apple Watch' : 'FacePhys Camera';
+  const rawHeartRate = paused ? 0 : hasAppleWatchData ? (hasAppleWatchHeartRate ? watchHeartRate : 0) : webcamBpm;
+  const heartRateSource = paused ? 'paused' : hasAppleWatchData ? 'Apple Watch' : 'FacePhys Camera';
   const heartRate = useRollingHeartRateAverage(rawHeartRate, rawHeartRate > 0, 10, heartRateSource);
   const outputRawCoordinates = paused ? { x: 0, y: 0 } : rawCoordinates;
   const outputCoordinates = paused ? { x: 0, y: 0 } : coordinates;
   const hasGaze = isCalibrated && outputRawCoordinates.x > 0 && outputRawCoordinates.y > 0;
   const hasHeartRate = rawHeartRate >= 40 && rawHeartRate <= 180;
-  const isHeartRateMeasuring = !paused && !hasAppleWatchHeartRate && !webcamBpmError && isRppgMeasuringStatus(webcamBpmStatus);
+  const isHeartRateMeasuring = !paused && !hasAppleWatchData && !webcamBpmError && isRppgMeasuringStatus(webcamBpmStatus);
   const heartRateStatus = paused
     ? '일시정지'
     : hasAppleWatchHeartRate
@@ -196,25 +195,25 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     : rppgFocusRawScore;
   const normalizedFocusScore = paused
     ? 0
-    : hasAppleWatchFocusScore
-    ? watchFocusScore ?? fallbackFocusScore
+    : hasAppleWatchData
+    ? watchFocusScore ?? 0
     : rppgFocusScore ?? fallbackFocusScore;
   const focusScore = rawFocusScore ?? 0;
   const focusThresholdRawScore = paused
     ? 0
-    : hasAppleWatchFocusScore
-    ? watchFocusThreshold
+    : hasAppleWatchData
+    ? watchFocusThreshold ?? null
     : rppgFocusMetrics?.thresholdRawScore ?? null;
   const focusIsFocused = paused
     ? null
-    : hasAppleWatchFocusScore
+    : hasAppleWatchData
     ? watchData?.focusIsFocused ?? (
-      watchFocusThreshold != null
+      watchFocusScore != null && watchFocusThreshold != null
         ? (watchFocusScore ?? 0) >= watchFocusThreshold
         : null
     )
     : rppgFocusMetrics?.isFocused ?? null;
-  const focusSource = paused ? 'paused' : hasAppleWatchFocusScore ? 'Apple Watch' : 'FacePhys Camera';
+  const focusSource = paused ? 'paused' : hasAppleWatchData ? 'Apple Watch' : 'FacePhys Camera';
   const hasFocusMeasurement = rawFocusScore != null
     && Number.isFinite(rawFocusScore)
     && rawFocusScore !== 0
@@ -245,7 +244,10 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     focusRawScore: rawFocusScore,
     focusThresholdRawScore,
     focusSource,
-    focusMetrics: paused || hasAppleWatchFocusScore ? null : rppgFocusMetrics,
+    hasAppleWatchData,
+    hasAppleWatchHeartRate,
+    hasAppleWatchFocusScore,
+    focusMetrics: paused || hasAppleWatchData ? null : rppgFocusMetrics,
     isTrackingReady,
     scriptsLoaded,
   };
