@@ -14,7 +14,7 @@ resource "aws_lb_target_group" "blue" {
 
   # 컨테이너가 살아있는지 확인하는 설정
   health_check {
-    path                = "/"
+    path                = "/api/health"
     protocol            = "HTTP"
     matcher             = "200,302"
     interval            = 30
@@ -42,7 +42,7 @@ resource "aws_lb_target_group" "green" {
   target_type = "ip"
 
   health_check {
-    path                = "/"
+    path                = "/api/health"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
