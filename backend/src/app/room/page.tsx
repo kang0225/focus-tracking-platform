@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
+import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
 import { useTrackingStreamPublisher } from '@/hooks/useTrackingStreamPublisher';
 import { useVideoRoom } from '@/hooks/useVideoRoom';
-import { FocusMetrics, RoomParticipant } from '@/types/tracker';
+import type { FocusMetrics, HeartRateSourcePreference, RoomParticipant } from '@/types/tracker';
 
 interface StreamVideoProps {
   stream: MediaStream | null;
@@ -114,6 +115,7 @@ export default function VideoRoomPage() {
   const [name, setName] = useState('');
   const [isLeaving, setIsLeaving] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
   const {
@@ -136,8 +138,9 @@ export default function VideoRoomPage() {
     focusIsFocused,
     focusThresholdRawScore,
     focusSource,
+    hasAppleWatchConnection,
     isTrackingReady,
-  } = useConcentrationData({ paused: isPaused });
+  } = useConcentrationData({ paused: isPaused, heartRateSourcePreference });
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
     gazeX: coordinates.x,
@@ -239,6 +242,13 @@ export default function VideoRoomPage() {
             <p className="mt-2 text-sm text-slate-400">{status}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <HeartRateSourceSelector
+              value={heartRateSourcePreference}
+              onChange={setHeartRateSourcePreference}
+              disabled={isLeaving}
+              appleWatchConnected={hasAppleWatchConnection}
+              className="w-56"
+            />
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}

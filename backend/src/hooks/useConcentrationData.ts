@@ -3,7 +3,7 @@ import { useWebGazer } from '../hooks/useWebGazer';
 import { isRppgMeasuringStatus, useRPPG } from '../hooks/useRPPG';
 import { useRollingHeartRateAverage } from '../hooks/useRollingHeartRateAverage';
 import { useRollingGazeAverage } from '../hooks/useRollingGazeAverage';
-import type { PairingData } from '@/types/tracker';
+import type { HeartRateSourcePreference, PairingData } from '@/types/tracker';
 
 function finiteMetric(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -11,9 +11,13 @@ function finiteMetric(value: number | null | undefined) {
 
 interface UseConcentrationDataOptions {
   paused?: boolean;
+  heartRateSourcePreference?: HeartRateSourcePreference;
 }
 
-export function useConcentrationData({ paused = false }: UseConcentrationDataOptions = {}) {
+export function useConcentrationData({
+  paused = false,
+  heartRateSourcePreference = 'webcam',
+}: UseConcentrationDataOptions = {}) {
   const {
     coordinates: rawCoordinates,
     isLoaded,
@@ -34,13 +38,18 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
   const watchHeartRate = finiteMetric(watchData?.heartRate) ?? 0;
   const watchFocusScore = finiteMetric(watchData?.focusScore);
   const watchFocusThreshold = finiteMetric(watchData?.focusThreshold);
-  const hasAppleWatchData = !!watchData
+  const hasAvailableAppleWatchData = !!watchData
     && watchData.status === 'active'
     && (
       watchHeartRate > 0
       || watchFocusScore != null
       || watchFocusThreshold != null
     );
+  const hasAppleWatchConnection = !!watchData
+    && watchData.status === 'active'
+    && (watchData.appleWatchPaired === true || hasAvailableAppleWatchData);
+  const useAppleWatchData = heartRateSourcePreference === 'apple-watch';
+  const hasAppleWatchData = useAppleWatchData && hasAvailableAppleWatchData;
   const hasAppleWatchHeartRate = hasAppleWatchData && watchHeartRate > 0;
   const hasAppleWatchFocusScore = hasAppleWatchData && watchFocusScore != null;
   const {
@@ -50,7 +59,7 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     focusScore: rppgFocusScore,
     focusRawScore: rppgFocusRawScore,
     focusMetrics: rppgFocusMetrics,
-  } = useRPPG('webgazerVideoFeed', !paused && !hasAppleWatchData);
+  } = useRPPG('webgazerVideoFeed', !paused && heartRateSourcePreference === 'webcam');
 
   useEffect(() => {
     const loadScripts = async () => {
@@ -165,25 +174,40 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     return () => window.clearInterval(interval);
   }, []);
 
-  const rawHeartRate = paused ? 0 : hasAppleWatchData ? (hasAppleWatchHeartRate ? watchHeartRate : 0) : webcamBpm;
-  const heartRateSource = paused ? 'paused' : hasAppleWatchData ? 'Apple Watch' : 'FacePhys Camera';
+  const rawHeartRate = paused
+    ? 0
+    : useAppleWatchData
+    ? hasAppleWatchHeartRate ? watchHeartRate : 0
+    : webcamBpm;
+  const heartRateSource = paused
+    ? 'paused'
+    : useAppleWatchData
+    ? 'Apple Watch'
+    : 'FacePhys Camera';
   const heartRate = useRollingHeartRateAverage(rawHeartRate, rawHeartRate > 0, 10, heartRateSource);
   const outputRawCoordinates = paused ? { x: 0, y: 0 } : rawCoordinates;
   const outputCoordinates = paused ? { x: 0, y: 0 } : coordinates;
   const hasGaze = isCalibrated && outputRawCoordinates.x > 0 && outputRawCoordinates.y > 0;
   const hasHeartRate = rawHeartRate >= 40 && rawHeartRate <= 180;
-  const isHeartRateMeasuring = !paused && !hasAppleWatchData && !webcamBpmError && isRppgMeasuringStatus(webcamBpmStatus);
+  const isHeartRateMeasuring = !paused
+    && !useAppleWatchData
+    && !webcamBpmError
+    && isRppgMeasuringStatus(webcamBpmStatus);
   const heartRateStatus = paused
     ? '일시정지'
-    : hasAppleWatchHeartRate
-    ? '감지됨'
-    : hasHeartRate
+    : useAppleWatchData
+    ? hasAppleWatchHeartRate
       ? '감지됨'
-      : webcamBpmError
-        ? '오류'
-        : isHeartRateMeasuring
-          ? '측정 중'
-          : '대기 중';
+      : hasAppleWatchConnection
+        ? 'Watch 대기'
+        : 'Watch 미연결'
+    : hasHeartRate
+    ? '감지됨'
+    : webcamBpmError
+      ? '오류'
+      : isHeartRateMeasuring
+        ? '측정 중'
+        : '대기 중';
   const heartRateStability = heartRate >= 40 && heartRate <= 180
     ? Math.max(0, 30 - Math.abs(heartRate - 75) * 0.35)
     : 0;
@@ -192,17 +216,23 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     ? null
     : hasAppleWatchFocusScore
     ? watchFocusScore ?? null
+    : useAppleWatchData
+    ? null
     : rppgFocusRawScore;
   const normalizedFocusScore = paused
     ? 0
     : hasAppleWatchData
     ? watchFocusScore ?? 0
+    : useAppleWatchData
+    ? 0
     : rppgFocusScore ?? fallbackFocusScore;
   const focusScore = rawFocusScore ?? 0;
   const focusThresholdRawScore = paused
     ? 0
     : hasAppleWatchData
     ? watchFocusThreshold ?? null
+    : useAppleWatchData
+    ? null
     : rppgFocusMetrics?.thresholdRawScore ?? null;
   const focusIsFocused = paused
     ? null
@@ -212,8 +242,10 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
         ? (watchFocusScore ?? 0) >= watchFocusThreshold
         : null
     )
+    : useAppleWatchData
+    ? null
     : rppgFocusMetrics?.isFocused ?? null;
-  const focusSource = paused ? 'paused' : hasAppleWatchData ? 'Apple Watch' : 'FacePhys Camera';
+  const focusSource = paused ? 'paused' : useAppleWatchData ? 'Apple Watch' : 'FacePhys Camera';
   const hasFocusMeasurement = rawFocusScore != null
     && Number.isFinite(rawFocusScore)
     && rawFocusScore !== 0
@@ -245,6 +277,8 @@ export function useConcentrationData({ paused = false }: UseConcentrationDataOpt
     focusThresholdRawScore,
     focusSource,
     hasAppleWatchData,
+    hasAvailableAppleWatchData,
+    hasAppleWatchConnection,
     hasAppleWatchHeartRate,
     hasAppleWatchFocusScore,
     focusMetrics: paused || hasAppleWatchData ? null : rppgFocusMetrics,

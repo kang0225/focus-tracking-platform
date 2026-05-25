@@ -1,5 +1,7 @@
 // src/types/tracker.ts
 
+export type HeartRateSourcePreference = 'webcam' | 'apple-watch';
+
 export interface PairingData {
   status: 'waiting' | 'active';
   heartRate: number;

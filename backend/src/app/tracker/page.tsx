@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PairingData, PairingResponse } from '../../types/tracker';
+import type { HeartRateSourcePreference, PairingData, PairingResponse } from '../../types/tracker';
 import WebcamView from '../../components/WebcamView';
+import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { isRppgMeasuringStatus, useRPPG } from '../../hooks/useRPPG';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
@@ -20,6 +21,7 @@ export default function TrackerPage() {
   const [data, setData] = useState<PairingData | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('페어링 버튼을 눌러 6자리 코드를 생성하세요.');
+  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const isPaired = !!data && data.status === 'active';
   const hasAppleWatchValues = isPaired
     && (
@@ -28,18 +30,19 @@ export default function TrackerPage() {
       || typeof data?.focusThreshold === 'number'
   );
   const hasAppleWatchConnection = isPaired && (data?.appleWatchPaired === true || hasAppleWatchValues);
-  const useRPPGMode = !hasAppleWatchValues;
-  const focusIsFocused = data?.focusIsFocused ?? (
+  const useAppleWatchMode = heartRateSourcePreference === 'apple-watch';
+  const useRPPGMode = heartRateSourcePreference === 'webcam';
+  const appleWatchFocusIsFocused = data?.focusIsFocused ?? (
     typeof data?.focusScore === 'number' && typeof data?.focusThreshold === 'number'
       ? data.focusScore >= data.focusThreshold
       : null
   );
-  const focusStatus = focusIsFocused == null ? '판정 대기' : focusIsFocused ? '집중 중' : '집중 저하';
+  const focusStatus = appleWatchFocusIsFocused == null ? '판정 대기' : appleWatchFocusIsFocused ? '집중 중' : '집중 저하';
 
   // rPPG 훅 사용
   const { bpm, confidence, status: rppgStatus } = useRPPG('webgazerVideoFeed', useRPPGMode);
-  const rawDisplayedHeartRate = hasAppleWatchValues ? data?.heartRate ?? 0 : bpm;
-  const heartRateAverageSource = hasAppleWatchValues ? 'Apple Watch' : 'FacePhys Camera';
+  const rawDisplayedHeartRate = useAppleWatchMode ? data?.heartRate ?? 0 : bpm;
+  const heartRateAverageSource = useAppleWatchMode ? 'Apple Watch' : 'FacePhys Camera';
   const displayedHeartRate = useRollingHeartRateAverage(rawDisplayedHeartRate, rawDisplayedHeartRate > 0, 10, heartRateAverageSource);
   const isRppgMeasuring = useRPPGMode && isRppgMeasuringStatus(rppgStatus);
   const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || isRppgMeasuring);
@@ -99,12 +102,18 @@ export default function TrackerPage() {
 
         <div className="mb-10 text-center">
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">FocusTracker Pairing</h1>
-          <p className="mt-3 text-sm text-slate-400 sm:text-base">버튼을 눌러 iPhone 앱과 기본 페어링을 진행하세요. Apple Watch가 페어링되지 않은 경우 웹캠이 준비되는 즉시 백엔드 FacePhys ONNX 모델로 rPPG 심박 측정이 자동으로 시작됩니다.</p>
+          <p className="mt-3 text-sm text-slate-400 sm:text-base">웹캠 또는 Apple Watch를 선택한 뒤 필요한 경우 iPhone 앱과 페어링을 진행하세요.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6">
             <div className="flex flex-col gap-4">
+              <HeartRateSourceSelector
+                value={heartRateSourcePreference}
+                onChange={setHeartRateSourcePreference}
+                appleWatchConnected={hasAppleWatchConnection}
+              />
+
               <div className="rounded-2xl bg-slate-900/90 p-5 shadow-inner shadow-slate-950/40">
                 <p className="text-sm text-slate-400">현재 상태</p>
                 <p className="mt-3 text-lg font-semibold text-white">{statusMessage}</p>
@@ -174,14 +183,14 @@ export default function TrackerPage() {
                 </div>
               )}
 
-              {hasAppleWatchConnection && !hasAppleWatchValues && (
+              {useAppleWatchMode && hasAppleWatchConnection && !hasAppleWatchValues && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
                   <p className="font-semibold text-emerald-200">Apple Watch 연결됨</p>
                   <p className="mt-1 text-slate-400">심박수와 집중 점수를 기다리는 중입니다.</p>
                 </div>
               )}
 
-              {hasAppleWatchValues && (
+              {useAppleWatchMode && hasAppleWatchValues && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
                   <p className="font-semibold text-emerald-200">Apple Watch 연결 완료!</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">

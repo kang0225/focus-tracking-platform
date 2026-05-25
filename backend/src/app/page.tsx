@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import WebcamView from '../components/WebcamView';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '../components/GazeDot';
+import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
 import { StatusCard } from '../components/StatusCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useTrackingStreamPublisher } from '@/hooks/useTrackingStreamPublisher';
+import type { HeartRateSourcePreference } from '@/types/tracker';
 
 function makeTrackingId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -29,6 +31,7 @@ export default function HomePage() {
   const createTrackingAnalysisJob = useTrackingAnalysisJob();
   const [isFinishing, setIsFinishing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const soloMeetingId = useMemo(() => makeTrackingId('solo'), []);
   const soloUserId = useMemo(() => makeTrackingId('user'), []);
   const {
@@ -51,8 +54,9 @@ export default function HomePage() {
     focusIsFocused,
     focusThresholdRawScore,
     focusSource,
+    hasAppleWatchConnection,
     isTrackingReady,
-  } = useConcentrationData({ paused: isPaused });
+  } = useConcentrationData({ paused: isPaused, heartRateSourcePreference });
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && (heartRate > 0 || isHeartRateMeasuring));
   const focusDisplayScore = formatMetric(focusRawScore);
   const focusThresholdDisplay = formatMetric(focusThresholdRawScore);
@@ -109,6 +113,13 @@ export default function HomePage() {
             <p className="text-slate-400">Real-time concentration monitoring dashboard</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <HeartRateSourceSelector
+              value={heartRateSourcePreference}
+              onChange={setHeartRateSourcePreference}
+              disabled={isFinishing}
+              appleWatchConnected={hasAppleWatchConnection}
+              className="w-56"
+            />
             <button
               onClick={() => router.push('/dashboard')}
               className="rounded-lg border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-800"
