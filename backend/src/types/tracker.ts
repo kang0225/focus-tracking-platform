@@ -33,6 +33,8 @@ export interface ParticipantMediaState {
   videoEnabled: boolean;
 }
 
+export type VideoRoomType = 'public' | 'invite';
+
 export interface RoomParticipant {
   id: string;
   name: string;
@@ -44,6 +46,8 @@ export interface RoomParticipant {
 
 export interface RoomSnapshot {
   roomId: string;
+  roomType: VideoRoomType;
+  inviteCode?: string;
   maxParticipants: number;
   participants: RoomParticipant[];
 }
