@@ -2,21 +2,14 @@ name: Terraform
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "terraform/environments/dev/**"
-      - ".github/workflows/**"
-  workflow_dispatch:
-    inputs:
-      apply:
-        description: "Run terraform apply after plan on the main branch"
-        required: false
-        type: boolean
-        default: false
+      - 'terraform/environments/dev/**'
+      - '.github/workflows/**'
 
 permissions:
-  contents: read
   id-token: write
+  contents: read
 
 env:
   AWS_REGION: "ap-northeast-2"
@@ -26,24 +19,22 @@ env:
   TF_INPUT: "false"
   TF_CLI_ARGS: "-no-color"
   TF_CLI_ARGS_init: "-lockfile=readonly"
-  TF_CLI_ARGS_plan: "-lock-timeout=5m"
   TF_CLI_ARGS_apply: "-lock-timeout=5m"
-  TF_PLUGIN_CACHE_DIR: "${{ github.workspace }}/.terraform.d/plugin-cache"
 
-  TF_VAR_aws_region: "ap-northeast-2"
-  TF_VAR_project_name: "focus-tracking-platform"
-  TF_VAR_environment: "dev"
-  TF_VAR_stack_name: "main"
-  TF_VAR_vpc_cidr: "10.0.0.0/16"
-  TF_VAR_az_a: "ap-northeast-2a"
-  TF_VAR_az_c: "ap-northeast-2c"
-  TF_VAR_public_subnet_a_cidr: "10.0.1.0/24"
-  TF_VAR_public_subnet_c_cidr: "10.0.2.0/24"
-  TF_VAR_private_app_subnet_a_cidr: "10.0.11.0/24"
-  TF_VAR_private_app_subnet_c_cidr: "10.0.12.0/24"
-  TF_VAR_private_db_subnet_a_cidr: "10.0.21.0/24"
-  TF_VAR_private_db_subnet_c_cidr: "10.0.22.0/24"
-  TF_VAR_domain_name: "study-room.click"
+  TF_VAR_aws_region: ap-northeast-2
+  TF_VAR_project_name: focus-tracking-platform
+  TF_VAR_environment: dev
+  TF_VAR_stack_name: main
+  TF_VAR_vpc_cidr: 10.0.0.0/16
+  TF_VAR_az_a: ap-northeast-2a
+  TF_VAR_az_c: ap-northeast-2c
+  TF_VAR_public_subnet_a_cidr: 10.0.1.0/24
+  TF_VAR_public_subnet_c_cidr: 10.0.2.0/24
+  TF_VAR_private_app_subnet_a_cidr: 10.0.11.0/24
+  TF_VAR_private_app_subnet_c_cidr: 10.0.12.0/24
+  TF_VAR_private_db_subnet_a_cidr: 10.0.21.0/24
+  TF_VAR_private_db_subnet_c_cidr: 10.0.22.0/24
+  TF_VAR_domain_name: study-room.click
   TF_VAR_alert_emails: ${{ vars.ALERT_EMAILS }}
   TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
   TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
@@ -51,61 +42,34 @@ env:
 
 jobs:
   terraform:
-    name: Terraform dev
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.ref == 'refs/heads/main'
-    concurrency:
-      group: terraform-dev
-      cancel-in-progress: false
 
     defaults:
       run:
-        shell: bash
         working-directory: ./terraform/environments/dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform fmt
-        working-directory: ${{ github.workspace }}
-        run: terraform fmt -check -diff -recursive terraform
-
-      - name: Restore Terraform provider cache
-        uses: actions/cache@v4
-        with:
-          path: .terraform.d/plugin-cache
-          key: terraform-${{ runner.os }}-${{ hashFiles('terraform/environments/dev/.terraform.lock.hcl') }}
-          restore-keys: |
-            terraform-${{ runner.os }}-
-
-      - name: Prepare Terraform provider cache
-        working-directory: ${{ github.workspace }}
-        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
-
-      - name: Configure AWS credentials
+      - name: AWS 인증 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          role-session-name: github-actions-terraform-dev
-          aws-region: ${{ env.AWS_REGION }}
-          mask-aws-account-id: true
+          aws-region: ap-northeast-2
 
-      - name: Terraform init
+      - name: Terraform 설치
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Fmt
+        run: terraform fmt -check -diff -recursive
+
+      - name: Terraform Init
         run: terraform init
 
-      - name: Terraform validate
-        run: terraform validate
+      - name: Terraform Plan
+        run: terraform plan
 
-      - name: Terraform plan
-        run: terraform plan -out=tfplan
-
-      - name: Terraform apply
-        if: github.event_name == 'push' || inputs.apply
-        run: terraform apply -auto-approve tfplan
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
