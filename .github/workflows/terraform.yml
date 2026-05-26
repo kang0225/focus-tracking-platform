@@ -80,8 +80,8 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform fmt
-        working-directory: ${{ github.workspace }}
-        run: terraform fmt -check -diff -recursive terraform
+        working-directory: .
+        run: terraform fmt -diff -recursive
 
       - name: Restore Terraform provider cache
         uses: actions/cache@v4
@@ -92,16 +92,8 @@ jobs:
             terraform-${{ runner.os }}-
 
       - name: Prepare Terraform provider cache
-        working-directory: ${{ github.workspace }}
+        working-directory: .
         run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          role-session-name: github-actions-terraform-dev
-          aws-region: ${{ env.AWS_REGION }}
-          mask-aws-account-id: true
 
       - name: Terraform init
         run: terraform init
