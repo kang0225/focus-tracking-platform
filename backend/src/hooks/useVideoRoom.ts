@@ -11,7 +11,13 @@ interface RemoteVideo {
 interface UseVideoRoomArgs {
   name: string;
   metrics: FocusMetrics;
+  joinMode: RoomJoinMode | null;
 }
+
+export type RoomJoinMode =
+  | { type: 'public' }
+  | { type: 'invite-create' }
+  | { type: 'invite-join'; inviteCode: string };
 
 const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -47,12 +53,39 @@ const getMediaErrorMessage = (error: unknown) => {
   return '카메라와 마이크를 준비하는 중 문제가 발생했습니다.';
 };
 
-export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
+const getJoinFailureMessage = (joinMode: RoomJoinMode) => {
+  if (joinMode.type === 'public') return '랜덤 매칭에 실패했습니다.';
+  if (joinMode.type === 'invite-create') return '초대코드 방을 만들지 못했습니다.';
+  return '초대코드 방에 입장하지 못했습니다.';
+};
+
+const getJoinStatus = (snapshot: RoomSnapshot, joinMode: RoomJoinMode) => {
+  if (joinMode.type === 'public') return `${snapshot.roomId}에 입장했습니다.`;
+  return `${snapshot.inviteCode ?? snapshot.roomId} 초대코드 방에 입장했습니다.`;
+};
+
+const getWaitingStatus = (snapshot: RoomSnapshot) => {
+  if (snapshot.participants.length >= snapshot.maxParticipants) return '방이 가득 찼습니다.';
+  return snapshot.roomType === 'invite'
+    ? '초대코드 참가자를 기다리는 중입니다.'
+    : '랜덤 참가자를 기다리는 중입니다.';
+};
+
+const readErrorMessage = async (res: Response, fallback: string) => {
+  try {
+    const data: { error?: unknown } = await res.json();
+    return typeof data.error === 'string' ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
   const clientId = useMemo(makeClientId, []);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteVideos, setRemoteVideos] = useState<RemoteVideo[]>([]);
-  const [status, setStatus] = useState('카메라와 마이크를 준비하는 중입니다.');
+  const [status, setStatus] = useState(joinMode ? '카메라와 마이크를 준비하는 중입니다.' : '입장 방식을 선택해주세요.');
   const [error, setError] = useState<string | null>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -243,8 +276,13 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
     let cancelled = false;
 
     const join = async () => {
+      if (!joinMode) return;
+
       let pendingStream: MediaStream | null = null;
       try {
+        setStatus('카메라와 마이크를 준비하는 중입니다.');
+        setError(null);
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: 960, height: 540 },
           audio: { echoCancellation: true, noiseSuppression: true },
@@ -263,26 +301,39 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
         });
         setLocalStream(stream);
 
-        const res = await fetch('/api/rooms/match', {
+        const fallbackError = getJoinFailureMessage(joinMode);
+        const requestBody = {
+          clientId,
+          name: nameRef.current,
+          metrics: metricsRef.current,
+          media: mediaRef.current,
+        };
+        const res = await fetch(joinMode.type === 'public' ? '/api/rooms/match' : '/api/rooms/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientId,
-            name: nameRef.current,
-            metrics: metricsRef.current,
-            media: mediaRef.current,
-          }),
+          body: JSON.stringify(joinMode.type === 'public'
+            ? requestBody
+            : {
+                ...requestBody,
+                action: joinMode.type === 'invite-create' ? 'create' : 'join',
+                inviteCode: joinMode.type === 'invite-join' ? joinMode.inviteCode : undefined,
+              }),
         });
-        if (!res.ok) throw new Error('랜덤 매칭에 실패했습니다.');
+        if (!res.ok) throw new Error(await readErrorMessage(res, fallbackError));
 
         const snapshot: RoomSnapshot = await res.json();
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
         setRoom(snapshot);
-        setStatus(`${snapshot.roomId}에 입장했습니다.`);
+        setStatus(getJoinStatus(snapshot, joinMode));
       } catch (err) {
         pendingStream?.getTracks().forEach((track) => track.stop());
         localStreamRef.current?.getTracks().forEach((track) => track.stop());
         setLocalStream(null);
-        setError(err instanceof Error && err.message === '랜덤 매칭에 실패했습니다.' ? err.message : getMediaErrorMessage(err));
+        setError(err instanceof DOMException ? getMediaErrorMessage(err) : err instanceof Error ? err.message : '화상방을 시작할 수 없습니다.');
         setStatus('입장 실패');
       }
     };
@@ -292,7 +343,7 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, joinMode]);
 
   const toggleAudio = useCallback(() => {
     setIsAudioEnabled((current) => {
@@ -378,7 +429,7 @@ export function useVideoRoom({ name, metrics }: UseVideoRoomArgs) {
         const snapshot: RoomSnapshot = await res.json();
         markRoomSeen();
         setRoom(snapshot);
-        setStatus(snapshot.participants.length >= snapshot.maxParticipants ? '방이 가득 찼습니다.' : '랜덤 참가자를 기다리는 중입니다.');
+        setStatus(getWaitingStatus(snapshot));
       } catch {
         setStatus('방 상태를 갱신하지 못했습니다.');
       }
