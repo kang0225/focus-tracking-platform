@@ -1,5 +1,25 @@
 import { NextResponse } from 'next/server';
 import { pairingCodes, setCurrentPairing } from '@/lib/db';
+import {
+  classifyAndUpdateFocusThreshold,
+  createInitialRppgFocusThresholdState,
+  type RppgFocusThresholdState,
+} from '@/lib/facephys/rppg';
+
+const globalStore = globalThis as typeof globalThis & {
+  __watchFocusThresholdStates?: Map<string, RppgFocusThresholdState>;
+};
+
+const watchFocusThresholdStates = globalStore.__watchFocusThresholdStates ??= new Map<string, RppgFocusThresholdState>();
+
+function getWatchFocusThresholdState(pairingCode: string) {
+  const existing = watchFocusThresholdStates.get(pairingCode);
+  if (existing) return existing;
+
+  const next = createInitialRppgFocusThresholdState();
+  watchFocusThresholdStates.set(pairingCode, next);
+  return next;
+}
 
 interface WatchMetricsRequest {
   pairingCode?: string;
@@ -63,15 +83,19 @@ export async function POST(request: Request) {
         body.focusThresholdRawScore,
         body.thresholdRawScore,
       ]);
+      const calculatedFocus = focusScore == null
+        ? null
+        : classifyAndUpdateFocusThreshold(focusScore, getWatchFocusThresholdState(pairingCode));
+      const nextFocusThreshold = calculatedFocus?.thresholdRawScore ?? focusThreshold ?? session.focusThreshold ?? null;
       const focusIsFocused = optionalBoolean(body.focusIsFocused)
         ?? optionalBoolean(body.isFocused)
         ?? optionalBoolean(body.focused)
         ?? (
-          focusScore != null && focusThreshold != null
-            ? focusScore >= focusThreshold
+          focusScore != null && nextFocusThreshold != null
+            ? focusScore >= nextFocusThreshold
             : session.focusIsFocused ?? null
         );
-      const hasWatchMetrics = heartRate > 0 || focusScore != null || focusThreshold != null;
+      const hasWatchMetrics = heartRate > 0 || focusScore != null || nextFocusThreshold != null;
       const nextSession = {
         ...session,
         heartRate,
@@ -79,7 +103,7 @@ export async function POST(request: Request) {
         updatedAt: Date.now(),
         appleWatchPaired: appleWatchPaired ?? session.appleWatchPaired ?? hasWatchMetrics,
         focusScore: focusScore ?? session.focusScore ?? null,
-        focusThreshold: focusThreshold ?? session.focusThreshold ?? null,
+        focusThreshold: nextFocusThreshold,
         focusIsFocused,
       };
 
