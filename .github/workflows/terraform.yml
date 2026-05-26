@@ -14,11 +14,9 @@ permissions:
 env:
   AWS_REGION: "ap-northeast-2"
   AWS_DEFAULT_REGION: "ap-northeast-2"
-  TF_VERSION: "1.9.8"
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_CLI_ARGS: "-no-color"
-  TF_CLI_ARGS_init: "-lockfile=readonly"
   TF_CLI_ARGS_apply: "-lock-timeout=5m"
 
   TF_VAR_aws_region: ap-northeast-2
@@ -63,9 +61,6 @@ jobs:
 
       - name: Terraform Fmt
         run: terraform fmt -check -diff -recursive
-
-      - name: Clean Terraform Plugins
-        run: rm -rf .terraform
 
       - name: Terraform Init
         run: terraform init
