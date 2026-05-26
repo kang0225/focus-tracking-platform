@@ -143,7 +143,6 @@ function VideoRoomEntry({ onJoin }: { onJoin: (joinMode: RoomJoinMode) => void }
           >
             <span className="text-sm font-semibold text-cyan-200">공개방 랜덤 입장</span>
             <span className="mt-4 block text-2xl font-bold text-white">랜덤 매칭 시작</span>
-            <span className="mt-3 block text-sm leading-6 text-slate-300">기존 방식 그대로 공개 큐에서 상대와 연결됩니다.</span>
           </button>
 
           <button
