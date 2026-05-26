@@ -95,6 +95,14 @@ jobs:
         working-directory: .
         run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-dev
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
       - name: Terraform init
         run: terraform init
 
