@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   serverExternalPackages: ['onnxruntime-node'],
   transpilePackages: [
     '@tensorflow-models/face-landmarks-detection',
