@@ -6,9 +6,7 @@ import {
   RoomSnapshot,
   SignalMessage,
   SignalType,
-  VideoRoomType,
 } from '../types/tracker';
-import { randomInt } from 'crypto';
 const globalStore = globalThis as typeof globalThis & {
   __focusPairingCodes?: Map<string, PairingData>;
   __focusCurrentPairing?: PairingData | null;
@@ -27,8 +25,6 @@ const SIGNAL_TTL_MS = 60_000;
 
 interface VideoRoom {
   id: string;
-  type: VideoRoomType;
-  inviteCode?: string;
   createdAt: number;
   participants: Map<string, RoomParticipant>;
   signals: SignalMessage[];
@@ -59,23 +55,6 @@ const makeRoomId = () => {
   return `ROOM-${random}`;
 };
 
-const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const INVITE_CODE_LENGTH = 6;
-
-export const normalizeInviteCode = (code: string) => code.trim().replace(/\s+/g, '').toUpperCase();
-
-const makeInviteCode = () => (
-  Array.from({ length: INVITE_CODE_LENGTH }, () => INVITE_CODE_CHARS[randomInt(INVITE_CODE_CHARS.length)]).join('')
-);
-
-const makeUniqueInviteCode = () => {
-  let code = makeInviteCode();
-  while ([...videoRooms.values()].some((room) => room.inviteCode === code)) {
-    code = makeInviteCode();
-  }
-  return code;
-};
-
 const cleanRoom = (room: VideoRoom) => {
   const now = Date.now();
   for (const [participantId, participant] of room.participants) {
@@ -98,41 +77,40 @@ export const cleanupVideoRooms = () => {
 
 export const serializeRoom = (room: VideoRoom): RoomSnapshot => ({
   roomId: room.id,
-  roomType: room.type,
-  inviteCode: room.inviteCode,
   maxParticipants: ROOM_CAPACITY,
   participants: [...room.participants.values()].sort((a, b) => a.joinedAt - b.joinedAt),
 });
 
-const findRoomByParticipant = (clientId: string) => (
-  [...videoRooms.values()].find((room) => room.participants.has(clientId))
-);
-
-const touchParticipant = (
-  room: VideoRoom,
+export const matchVideoRoom = (
   clientId: string,
   name: string,
   media?: Partial<ParticipantMediaState>,
 ) => {
-  const participant = room.participants.get(clientId);
-  if (!participant) return null;
+  cleanupVideoRooms();
 
-  participant.name = name || participant.name;
-  participant.lastSeenAt = Date.now();
-  participant.media = {
-    ...participant.media,
-    ...media,
-  };
+  const existingRoom = [...videoRooms.values()].find((room) => room.participants.has(clientId));
+  if (existingRoom) {
+    const participant = existingRoom.participants.get(clientId)!;
+    participant.name = name || participant.name;
+    participant.lastSeenAt = Date.now();
+    participant.media = {
+      ...participant.media,
+      ...media,
+    };
+    return serializeRoom(existingRoom);
+  }
 
-  return serializeRoom(room);
-};
+  let room = [...videoRooms.values()].find((candidate) => candidate.participants.size < ROOM_CAPACITY);
+  if (!room) {
+    room = {
+      id: makeRoomId(),
+      createdAt: Date.now(),
+      participants: new Map(),
+      signals: [],
+    };
+    videoRooms.set(room.id, room);
+  }
 
-const addParticipant = (
-  room: VideoRoom,
-  clientId: string,
-  name: string,
-  media?: Partial<ParticipantMediaState>,
-) => {
   room.participants.set(clientId, {
     id: clientId,
     name: name || `사용자 ${room.participants.size + 1}`,
@@ -146,85 +124,6 @@ const addParticipant = (
   });
 
   return serializeRoom(room);
-};
-
-export const matchVideoRoom = (
-  clientId: string,
-  name: string,
-  media?: Partial<ParticipantMediaState>,
-) => {
-  cleanupVideoRooms();
-
-  const existingRoom = findRoomByParticipant(clientId);
-  if (existingRoom) {
-    return touchParticipant(existingRoom, clientId, name, media)!;
-  }
-
-  let room = [...videoRooms.values()].find((candidate) => (
-    candidate.type === 'public' && candidate.participants.size < ROOM_CAPACITY
-  ));
-  if (!room) {
-    room = {
-      id: makeRoomId(),
-      type: 'public',
-      createdAt: Date.now(),
-      participants: new Map(),
-      signals: [],
-    };
-    videoRooms.set(room.id, room);
-  }
-
-  return addParticipant(room, clientId, name, media);
-};
-
-export const createInviteVideoRoom = (
-  clientId: string,
-  name: string,
-  media?: Partial<ParticipantMediaState>,
-) => {
-  cleanupVideoRooms();
-
-  const existingRoom = findRoomByParticipant(clientId);
-  if (existingRoom) {
-    return touchParticipant(existingRoom, clientId, name, media)!;
-  }
-
-  const inviteCode = makeUniqueInviteCode();
-  const room: VideoRoom = {
-    id: `INVITE-${inviteCode}`,
-    type: 'invite',
-    inviteCode,
-    createdAt: Date.now(),
-    participants: new Map(),
-    signals: [],
-  };
-  videoRooms.set(room.id, room);
-
-  return addParticipant(room, clientId, name, media);
-};
-
-export const joinInviteVideoRoom = (
-  inviteCode: string,
-  clientId: string,
-  name: string,
-  media?: Partial<ParticipantMediaState>,
-): { status: 'joined'; room: RoomSnapshot } | { status: 'not-found' } | { status: 'full' } => {
-  cleanupVideoRooms();
-
-  const existingRoom = findRoomByParticipant(clientId);
-  if (existingRoom) {
-    return { status: 'joined', room: touchParticipant(existingRoom, clientId, name, media)! };
-  }
-
-  const normalizedCode = normalizeInviteCode(inviteCode);
-  const room = [...videoRooms.values()].find((candidate) => (
-    candidate.type === 'invite' && candidate.inviteCode === normalizedCode
-  ));
-
-  if (!room) return { status: 'not-found' };
-  if (room.participants.size >= ROOM_CAPACITY) return { status: 'full' };
-
-  return { status: 'joined', room: addParticipant(room, clientId, name, media) };
 };
 
 export const getVideoRoom = (roomId: string) => {
