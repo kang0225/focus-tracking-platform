@@ -74,7 +74,7 @@ function updateRunningAverage(average: number, count: number, value: number) {
   };
 }
 
-function classifyAndUpdateFocusThreshold(rawScore: number, state: RppgFocusThresholdState) {
+export function classifyAndUpdateFocusThreshold(rawScore: number, state: RppgFocusThresholdState) {
   const thresholdRawScore = focusThresholdRawScore(state);
   const spanRawScore = Math.abs(state.highAverageRawScore - state.lowAverageRawScore);
   const isFocused = rawScore >= thresholdRawScore;
