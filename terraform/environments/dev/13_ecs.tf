@@ -53,7 +53,7 @@ resource "aws_ecs_task_definition" "app" {
   # cpu=768: 1 EC2(2 vCPU)에 Task 2개 적재 시 CPU 100% 활용
   # memory=1536: Task 2개 합 3072 MB, t4g.medium 가용 ~3700 MB 중 헤드룸 ~630 MB 확보
   # Task 1개 단독 실행 시엔 cpu가 소프트 리밋이라 burst로 2 vCPU까지 활용 가능
-  cpu    = "768" # 1 vCPU
+  cpu    = "768"  # 1 vCPU
   memory = "1536" # 1.5 GB
 
   # 컨테이너 실행 역할: ECR에서 이미지 pull + CloudWatch 로그 전송에 사용
