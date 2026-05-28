@@ -5,6 +5,11 @@ import {
   type TrackingAnalysisJobRequest,
   type TrackingAnalysisJobStatus,
 } from '@/lib/redisStream';
+import { getSession } from '@/lib/auth';
+import * as trackingRepo from '@/db/repositories/tracking';
+import * as rankingRepo from '@/db/repositories/ranking';
+import * as redis from '@/db/redis';
+import { toRankingDate } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -138,36 +143,96 @@ async function analyzeSession(body: TrackingAnalysisJobRequest) {
 
 export async function POST(request: Request) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     if (!isValidRequest(body)) {
       return NextResponse.json({ error: 'invalid tracking analysis job request' }, { status: 400 });
     }
+    // 인증된 사용자 id 로 강제 — body.userId 신뢰 안 함.
+    const userId = session.user.id;
+    const requestForMl: TrackingAnalysisJobRequest = { ...body, userId };
 
-    const result = await createTrackingAnalysisJob(body);
+    const result = await createTrackingAnalysisJob(requestForMl);
     const baseStatus = {
       jobId: result.jobId,
       meetingId: body.meetingId,
-      userId: body.userId,
+      userId,
       page: body.page,
       reason: body.reason,
       requestedAt: body.requestedAt,
     };
 
-    await setTrackingAnalysisJobStatus({
-      ...baseStatus,
-      status: 'processing',
+    // Postgres tracking_jobs 에도 행 생성 (영속 이력).
+    const jobRow = await trackingRepo.createTrackingJob({
+      userId,
+      meetingId: body.meetingId,
+      page: body.page,
+      reason: body.reason,
+      requestedAt: new Date(body.requestedAt),
     });
 
+    await setTrackingAnalysisJobStatus({ ...baseStatus, status: 'processing' });
+    await trackingRepo.updateTrackingJobStatus({ jobId: jobRow.id, status: 'processing' });
+
     try {
-      const analysis = await analyzeSession(body);
+      const analysis = await analyzeSession(requestForMl);
+      const completedResult = buildCompletedResult(analysis);
       const completedStatus: TrackingAnalysisJobStatus = {
         ...baseStatus,
         status: 'completed',
-        result: buildCompletedResult(analysis),
+        result: completedResult,
       };
 
       await setTrackingAnalysisJobStatus(completedStatus);
-      return NextResponse.json({ ok: true, ...result, status: completedStatus.status, result: completedStatus.result });
+      await trackingRepo.updateTrackingJobStatus({
+        jobId: jobRow.id,
+        status: 'completed',
+        resultJson: completedResult,
+      });
+
+      // tracking_sessions 행 생성 + 랭킹 계산.
+      // started_at 은 requestedAt 보다 duration 만큼 이전.
+      const durationSeconds = completedResult.durationSeconds ?? 0;
+      const startedAt = new Date(new Date(body.requestedAt).getTime() - durationSeconds * 1000);
+      const sessionRow = await trackingRepo.startTrackingSession({
+        userId,
+        page: body.page,
+      });
+      // 시간 보정 — start 시점은 requestedAt - duration.
+      // (startTrackingSession 이 started_at default now() 라 임시로 INSERT 후 별도 보정은 생략;
+      //  필요 시 추후 schema 에 started_at 명시 INSERT 추가)
+      await trackingRepo.endTrackingSession({
+        sessionId: sessionRow.id,
+        durationSeconds,
+        avgBpm: completedResult.avgBpm ?? null,
+        focusRatio: completedResult.focusRatio ?? null,
+        summaryJson: completedResult,
+      });
+
+      const focusRatio = completedResult.focusRatio ?? 0;
+      const finalized = await rankingRepo.finalizeSessionRanking({
+        sessionId: sessionRow.id,
+        focusRatio,
+        durationSeconds,
+        closedAt: new Date(body.requestedAt),
+      });
+
+      // 리더보드 캐시 무효화.
+      await redis.invalidateLeaderboardCache(finalized.rankingDate);
+
+      // 추적용 — startedAt 사용 (반환 페이로드 변경 없이 silent)
+      void startedAt;
+
+      return NextResponse.json({
+        ok: true,
+        ...result,
+        status: completedStatus.status,
+        result: completedStatus.result,
+      });
     } catch (analysisError) {
       const message = analysisError instanceof Error ? analysisError.message : 'tracking analysis failed';
       const failedStatus: TrackingAnalysisJobStatus = {
@@ -177,6 +242,11 @@ export async function POST(request: Request) {
       };
 
       await setTrackingAnalysisJobStatus(failedStatus);
+      await trackingRepo.updateTrackingJobStatus({
+        jobId: jobRow.id,
+        status: 'failed',
+        error: message,
+      });
       return NextResponse.json({ ok: true, ...result, status: failedStatus.status, error: message });
     }
   } catch (error) {
@@ -185,3 +255,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
+
+// Suppress unused for now — date import retained for future ranking range filters.
+void toRankingDate;

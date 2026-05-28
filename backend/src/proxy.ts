@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Next.js middleware (Edge runtime).
+ *
+ * 여기서는 쿠키의 sid 토큰 서명만 검증한다. pg/postgres 는 Edge 에서 못 쓰므로
+ * sessions 테이블 lookup 은 각 라우트의 getSession() 에서 수행.
+ *
+ * 즉 이 미들웨어는 "쿠키 형식이 유효하고 만료 안 됐는가" 까지만 보장하고,
+ * 사용자가 실제로 revoke 안 됐는지는 라우트가 책임짐.
+ */
+
 const SESSION_COOKIE = 'focus_session';
 const protectedPaths = ['/', '/dashboard', '/result', '/room', '/tracker'];
 
@@ -14,7 +24,7 @@ const bytesToBase64Url = (bytes: ArrayBuffer) => {
   return btoa(chars).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
-const verifySession = async (token?: string) => {
+const verifyToken = async (token?: string) => {
   const secret = process.env.AUTH_SECRET;
   if (!token || !secret) return false;
 
@@ -28,12 +38,20 @@ const verifySession = async (token?: string) => {
     false,
     ['sign'],
   );
-  const expected = bytesToBase64Url(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
+  const expected = bytesToBase64Url(
+    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)),
+  );
   if (expected !== signature) return false;
 
   try {
-    const session = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { expiresAt?: number };
-    return typeof session.expiresAt === 'number' && session.expiresAt > Date.now();
+    // sid 토큰 형식: { sid: string, exp: number }
+    const decoded = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as {
+      sid?: string;
+      exp?: number;
+    };
+    return typeof decoded.sid === 'string'
+      && typeof decoded.exp === 'number'
+      && decoded.exp > Date.now();
   } catch {
     return false;
   }
@@ -41,13 +59,15 @@ const verifySession = async (token?: string) => {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const shouldProtect = protectedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const shouldProtect = protectedPaths.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
   if (!shouldProtect || pathname === '/login') {
     return NextResponse.next();
   }
 
-  const hasSession = await verifySession(request.cookies.get(SESSION_COOKIE)?.value);
-  if (hasSession) return NextResponse.next();
+  const hasValidToken = await verifyToken(request.cookies.get(SESSION_COOKIE)?.value);
+  if (hasValidToken) return NextResponse.next();
 
   const loginUrl = request.nextUrl.clone();
   loginUrl.pathname = '/login';
@@ -56,5 +76,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next|favicon.ico|opencv.js|heartbeat.js|webgazer.js|haarcascade_frontalface_alt.xml|.*\\.svg).*)'],
+  matcher: [
+    '/((?!api|_next|favicon.ico|opencv.js|heartbeat.js|webgazer.js|haarcascade_frontalface_alt.xml|.*\\.svg).*)',
+  ],
 };

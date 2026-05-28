@@ -8,7 +8,9 @@ import {
   type ActivePairingRow,
 } from '../schema/pairing';
 
-const PAIRING_TTL_MS = 1000 * 60 * 5;
+// 페어링 코드 TTL — 사용자가 한참 측정해도 안 끊기게 24시간.
+// 짧게 가져가면 측정 도중 Apple Watch 연결이 끊겨버려 UX 손상.
+const PAIRING_TTL_MS = 1000 * 60 * 60 * 24;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 
@@ -62,6 +64,25 @@ export async function findActiveCode(code: string): Promise<PairingCodeRow | nul
         eq(pairingCodes.code, normalizePairingCode(code)),
         gt(pairingCodes.expiresAt, new Date()),
         isNull(pairingCodes.claimedAt),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * 페어링 코드 row 조회 — claim 여부 무관.
+ * Apple Watch (heartrate route) 처럼 코드로 issuer_user_id 만 알아내면 되는 케이스용.
+ * expires_at 이 지나면 null.
+ */
+export async function findPairingCodeById(code: string): Promise<PairingCodeRow | null> {
+  const rows = await db
+    .select()
+    .from(pairingCodes)
+    .where(
+      and(
+        eq(pairingCodes.code, normalizePairingCode(code)),
+        gt(pairingCodes.expiresAt, new Date()),
       ),
     )
     .limit(1);
@@ -125,6 +146,17 @@ export async function getActivePairing(userId: string): Promise<ActivePairingRow
     .where(eq(activePairings.userId, userId))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * heartrate route 가 Apple Watch 메트릭 첫 수신 시 호출. active_pairings 의
+ * apple_watch_paired 컬럼을 갱신 (이미 행이 있어야 의미 있음).
+ */
+export async function markApplePaired(userId: string): Promise<void> {
+  await db
+    .update(activePairings)
+    .set({ appleWatchPaired: 'true', updatedAt: sql`now()` })
+    .where(eq(activePairings.userId, userId));
 }
 
 export async function clearActivePairing(userId: string): Promise<void> {

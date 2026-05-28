@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { appendTrackingStream, type TrackingStreamPayload } from '@/lib/redisStream';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +25,13 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
 
 export async function POST(request: Request) {
   try {
+    // 매 초 호출되는 endpoint — sessions 테이블 lookup 비싸므로 서명만 검증.
+    const cookieStore = await cookies();
+    const claims = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
+    if (!claims) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     if (!isValidPayload(body)) {
       return NextResponse.json({ error: 'invalid tracking payload' }, { status: 400 });

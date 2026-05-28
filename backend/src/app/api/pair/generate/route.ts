@@ -1,12 +1,19 @@
-// src/app/api/pair/generate/route.ts
 import { NextResponse } from 'next/server';
-import { pairingCodes } from '@/lib/db'; 
+import { getSession } from '@/lib/auth';
+import * as pairingRepo from '@/db/repositories/pairing';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  pairingCodes.set(code, {
-    status: 'waiting',
-    heartRate: 0,
-    updatedAt: Date.now()
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const created = await pairingRepo.issuePairingCode({
+    issuerUserId: session.user.id,
   });
-  return NextResponse.json({ pairingCode: code });
+
+  return NextResponse.json({ pairingCode: created.code });
 }
