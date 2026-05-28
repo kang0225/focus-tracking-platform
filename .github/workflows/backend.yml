@@ -82,6 +82,7 @@ jobs:
             REDIS_HOST=${{ secrets.REDIS_HOST }}
             REDIS_PORT=${{ secrets.REDIS_PORT }}
             ML_SERVICE_URL=${{ secrets.ML_SERVICE_URL }}
+            RUN_MIGRATIONS=true
 
       - name: Deploy to ECS (CodeDeploy Blue/Green)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
