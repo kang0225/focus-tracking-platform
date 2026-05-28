@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import Link from 'next/link';
 
 const errorMessages: Record<string, string> = {
   missing_config: 'Google OAuth 환경 변수가 아직 설정되지 않았습니다.',
@@ -16,33 +17,41 @@ function LoginContent() {
   const error = searchParams.get('error');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-      <section className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900/90 p-8 shadow-2xl">
-        <p className="text-sm font-semibold text-cyan-300">FocusTracker</p>
-        <h1 className="mt-2 text-3xl font-bold">로그인</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-400">
-          Google 계정으로 로그인한 뒤 집중도 모니터링, 화상 집중방, 대시보드를 사용할 수 있습니다.
-        </p>
+    <main className="flex min-h-screen items-center justify-center px-4" style={{ background: 'var(--color-bg-tint)' }}>
+      <section className="w-full max-w-md">
+        <Link href="/" className="mb-7 flex items-center justify-center gap-2">
+          <i className="ti ti-target text-2xl" style={{ color: 'var(--color-brand-600)' }} aria-hidden="true" />
+          <span className="text-lg font-medium" style={{ color: 'var(--color-brand-700)' }}>FocusTracking</span>
+        </Link>
 
-        {error && (
-          <div className="mt-6 rounded-md border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100">
-            {errorMessages[error] ?? '로그인에 실패했습니다. 다시 시도해주세요.'}
-          </div>
-        )}
+        <div className="ft-card" style={{ padding: '2rem 2rem' }}>
+          <div className="text-xs font-medium" style={{ color: 'var(--color-brand-600)' }}>환영합니다</div>
+          <h1 className="mt-1 text-2xl font-medium" style={{ color: 'var(--color-brand-900)', letterSpacing: '-0.01em' }}>
+            Google로 로그인
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--color-text-soft)' }}>
+            로그인하면 집중도 측정·화상 스터디룸·랭킹을 모두 사용할 수 있습니다.
+          </p>
 
-        <a
-          href="/api/auth/login"
-          className="mt-8 flex h-12 w-full items-center justify-center rounded-md bg-white px-4 text-sm font-bold text-slate-950 transition hover:bg-slate-200"
-        >
-          Google로 계속하기
-        </a>
+          {error && (
+            <div className="mt-5 rounded-md border px-3 py-2.5 text-sm" style={{ background: '#FEF2F2', borderColor: '#FECACA', color: '#B91C1C' }}>
+              {errorMessages[error] ?? '로그인에 실패했습니다. 다시 시도해주세요.'}
+            </div>
+          )}
 
-        <p className="mt-5 text-xs leading-5 text-slate-500">
-          개발 환경에서는 Google OAuth 클라이언트의 승인된 리디렉션 URI를
-          {' '}
-          <span className="font-mono text-slate-300">http://localhost:3000/api/auth/callback</span>
-          로 설정하세요.
-        </p>
+          <a
+            href="/api/auth/login"
+            className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors"
+            style={{ background: 'var(--color-brand-500)', color: 'white' }}
+          >
+            <i className="ti ti-brand-google text-base" aria-hidden="true" />
+            Google 계정으로 계속하기
+          </a>
+
+          <Link href="/" className="mt-4 block text-center text-xs" style={{ color: 'var(--color-text-soft)' }}>
+            ← 처음 화면으로
+          </Link>
+        </div>
       </section>
     </main>
   );
@@ -50,7 +59,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<main className="min-h-screen" style={{ background: 'var(--color-bg-tint)' }} />}>
       <LoginContent />
     </Suspense>
   );

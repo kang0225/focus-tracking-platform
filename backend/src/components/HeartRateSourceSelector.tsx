@@ -10,11 +10,7 @@ interface HeartRateSourceSelectorProps {
   className?: string;
 }
 
-const OPTIONS: Array<{
-  value: HeartRateSourcePreference;
-  label: string;
-  caption: string;
-}> = [
+const OPTIONS: Array<{ value: HeartRateSourcePreference; label: string; caption: string }> = [
   { value: 'webcam', label: '웹캠', caption: 'FacePhys' },
   { value: 'apple-watch', label: 'Apple Watch', caption: 'Watch' },
 ];
@@ -27,9 +23,11 @@ export function HeartRateSourceSelector({
   className = '',
 }: HeartRateSourceSelectorProps) {
   return (
-    <div className={`space-y-2 ${className}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">심박 소스</p>
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950/80 p-1 ring-1 ring-slate-700">
+    <div className={`space-y-1.5 ${className}`}>
+      <p className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--color-text-soft)' }}>
+        심박 소스
+      </p>
+      <div className="grid grid-cols-2 gap-1 rounded-md p-1" style={{ background: 'var(--color-bg-soft)', border: '1px solid var(--color-border)' }}>
         {OPTIONS.map((option) => {
           const selected = value === option.value;
           return (
@@ -39,14 +37,16 @@ export function HeartRateSourceSelector({
               aria-pressed={selected}
               disabled={disabled}
               onClick={() => onChange(option.value)}
-              className={`min-h-10 rounded-md px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                selected
-                  ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
+              className="rounded-md px-2.5 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                background: selected ? 'var(--color-brand-500)' : 'transparent',
+                color: selected ? 'white' : 'var(--color-text-soft)',
+              }}
             >
-              <span className="block text-sm font-semibold leading-4">{option.label}</span>
-              <span className={`block text-[10px] leading-4 ${selected ? 'text-cyan-50/85' : 'text-slate-500'}`}>
+              <span className="block text-xs font-medium leading-tight">{option.label}</span>
+              <span className="block text-[10px] leading-tight" style={{
+                color: selected ? 'rgba(255,255,255,0.75)' : 'var(--color-text-muted)',
+              }}>
                 {option.value === 'apple-watch' && appleWatchConnected ? '연결됨' : option.caption}
               </span>
             </button>

@@ -11,7 +11,9 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 
 const SESSION_COOKIE = 'focus_session';
-const protectedPaths = ['/', '/dashboard', '/result', '/room', '/tracker'];
+// 메인 페이지 ('/') 는 누구나 접근 가능 — 로그인 안 한 상태에서도 명예의 전당 등을
+// 볼 수 있고, 측정/스터디룸 클릭 시 로그인으로 redirect.
+const protectedPaths = ['/measure', '/result', '/room', '/tracker'];
 
 const base64UrlToBytes = (value: string) => {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');

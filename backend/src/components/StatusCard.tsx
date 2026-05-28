@@ -1,33 +1,28 @@
-// src/components/StatusCard.tsx
-
 interface StatusCardProps {
   label: string;
   status: string;
   isActive: boolean;
-  colorClass: string;
+  colorClass?: string;
 }
 
-// 명시적으로 export를 붙여줘야 합니다!
-export const StatusCard = ({ label, status, isActive, colorClass }: StatusCardProps) => {
+const DOT_COLORS: Record<string, string> = {
+  emerald: 'var(--color-success)',
+  red: 'var(--color-danger)',
+  blue: 'var(--color-brand-500)',
+};
+
+export const StatusCard = ({ label, status, isActive, colorClass = 'blue' }: StatusCardProps) => {
+  const activeColor = DOT_COLORS[colorClass] ?? 'var(--color-brand-500)';
   return (
-    <div className={`rounded-2xl bg-gradient-to-br from-${colorClass}-900/30 to-slate-900/70 p-4 ring-1 ring-${colorClass}-500/20`}>
-      <div className="flex items-center gap-3">
-        {/* Tailwind에서 동적 클래스를 사용할 때 주의: 
-            컴파일러가 클래스명을 인식하지 못할 수 있으므로 안전한 방식은 아래와 같습니다. */}
-        <div className={`h-3 w-3 rounded-full ${
-          isActive 
-            ? (colorClass === 'emerald' ? 'bg-emerald-400 animate-pulse' : 
-               colorClass === 'red' ? 'bg-red-400 animate-pulse' : 'bg-blue-400 animate-pulse')
-            : 'bg-slate-600'
-        }`}></div>
+    <div className="ft-card" style={{ padding: '0.875rem 1rem' }}>
+      <div className="flex items-center gap-2.5">
+        <div
+          className={`h-2 w-2 rounded-full ${isActive ? 'animate-pulse' : ''}`}
+          style={{ background: isActive ? activeColor : 'var(--color-text-muted)' }}
+        />
         <div>
-          <p className="text-sm text-slate-400">{label}</p>
-          <p className={`font-semibold ${
-            isActive 
-              ? (colorClass === 'emerald' ? 'text-emerald-400' : 
-                 colorClass === 'red' ? 'text-red-400' : 'text-blue-400')
-              : 'text-slate-500'
-          }`}>
+          <p className="text-xs" style={{ color: 'var(--color-text-soft)' }}>{label}</p>
+          <p className="text-sm font-medium" style={{ color: isActive ? activeColor : 'var(--color-text-muted)' }}>
             {status}
           </p>
         </div>

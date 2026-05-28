@@ -1,222 +1,480 @@
-﻿'use client';
+'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import WebcamView from '../components/WebcamView';
-import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
-import GazeDot from '../components/GazeDot';
-import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
-import { StatusCard } from '../components/StatusCard';
-import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
-import { useConcentrationData } from '@/hooks/useConcentrationData';
-import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
-import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
-import { useTrackingStreamPublisher } from '@/hooks/useTrackingStreamPublisher';
-import type { HeartRateSourcePreference } from '@/types/tracker';
+import Navbar from '@/components/Navbar';
 
-function makeTrackingId(prefix: string) {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+interface AuthUser {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
 }
 
-function formatMetric(value: number | null | undefined, digits = 3) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
-  return Number.isInteger(value) ? String(value) : value.toFixed(digits);
+interface SessionItem {
+  id: string;
+  startedAt: number;
+  durationSeconds: number;
+  focusRatio: number | null;
+  avgBpm: number | null;
+  rankingScore: number | null;
 }
+
+interface StatsResp {
+  stats: { sessionCount: number; totalDurationSeconds: number; avgBpm: number | null; avgFocusRatio: number | null } | null;
+  sessions: SessionItem[];
+}
+
+interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  displayName: string;
+  rankingScore: number;
+  highFocusSeconds: number;
+  validSeconds: number;
+  focusRatio: number;
+}
+
+type RankCategory = 'score' | 'time' | 'focus';
+type RankRange = 'day' | 'week' | 'month';
+
+const CATEGORIES: { key: RankCategory; label: string; icon: string }[] = [
+  { key: 'score', label: '점수왕', icon: 'ti-trophy' },
+  { key: 'time', label: '엉덩이왕', icon: 'ti-armchair' },
+  { key: 'focus', label: '몰입왕', icon: 'ti-bolt' },
+];
+
+const RANGES: { key: RankRange; label: string }[] = [
+  { key: 'day', label: '오늘' },
+  { key: 'week', label: '이번 주' },
+  { key: 'month', label: '이번 달' },
+];
+
+const formatDuration = (seconds: number) => {
+  if (!seconds || seconds < 0) return '0분';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}시간 ${m}분`;
+  return `${m}분`;
+};
+
+const formatTime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${String(m).padStart(2, '0')}m`;
+};
+
+const formatRelativeDate = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const prefix = isToday ? '오늘' : isYesterday ? '어제' : `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${prefix} ${hh}:${mm}`;
+};
+
+const todayDateStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const dDay = (target: Date) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return diff;
+};
+
+const autoComment = (entry: LeaderboardEntry): string => {
+  if (entry.focusRatio >= 0.85) return '몰입의 신';
+  if (entry.validSeconds >= 4 * 3600) return '엉덩이 챔피언';
+  if (entry.focusRatio >= 0.75) return '오늘도 화이팅';
+  if (entry.validSeconds >= 2 * 3600) return '꾸준한 그대';
+  return '시간만 늘리면 탑 5';
+};
 
 export default function HomePage() {
   const router = useRouter();
-  const createTrackingAnalysisJob = useTrackingAnalysisJob();
-  const [isFinishing, setIsFinishing] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
-  const soloMeetingId = useMemo(() => makeTrackingId('solo'), []);
-  const soloUserId = useMemo(() => makeTrackingId('user'), []);
-  const {
-    coordinates,
-    rawCoordinates,
-    isLoaded,
-    isCalibrated,
-    currentCalibrationPointIndex,
-    calibrationPointClickCount,
-    clicksPerCalibrationPoint,
-    totalCalibrationPoints,
-    isCalibrationBusy,
-    recordCalibrationPoint,
-    resetCalibration,
-    heartRate,
-    heartRateSource,
-    heartRateStatus,
-    isHeartRateMeasuring,
-    focusRawScore,
-    focusIsFocused,
-    focusThresholdRawScore,
-    focusSource,
-    hasAppleWatchConnection,
-    isTrackingReady,
-  } = useConcentrationData({ paused: isPaused, heartRateSourcePreference });
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && (heartRate > 0 || isHeartRateMeasuring));
-  const focusDisplayScore = formatMetric(focusRawScore);
-  const focusThresholdDisplay = formatMetric(focusThresholdRawScore);
-  const focusStatus = isPaused ? '일시정지' : focusIsFocused == null ? '판정 대기' : focusIsFocused ? '집중 중' : '집중 저하';
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [data, setData] = useState<StatsResp | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [myRank, setMyRank] = useState<{ rank: number; total: number; rankingScore: number; highFocusSeconds: number; validSeconds: number } | null>(null);
+  const [activeCategory, setActiveCategory] = useState<RankCategory>('score');
+  const [activeRange, setActiveRange] = useState<RankRange>('day');
+  const [inviteCodeInput, setInviteCodeInput] = useState('');
 
-  const { stopPublishing } = useTrackingStreamPublisher({
-    enabled: isLoaded && isTrackingReady,
-    paused: isPaused,
-    data: {
-      meetingId: soloMeetingId,
-      userId: soloUserId,
-      heartRate,
-      heartRateSource,
-      heartRateStatus,
-      gazeX: coordinates.x,
-      gazeY: coordinates.y,
-      rawGazeX: rawCoordinates.x,
-      rawGazeY: rawCoordinates.y,
-      isGazeCalibrated: isCalibrated,
-      focusScore: focusRawScore ?? undefined,
-      focusSource,
-      focusIsFocused,
-      focusThresholdRawScore,
-      isTrackingReady,
-      page: 'solo',
-    },
-  });
+  // 사용자 + 본인 세션 데이터 (1회 fetch)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const meRes = await fetch('/api/auth/me');
+        const meData = meRes.ok ? await meRes.json() : null;
+        if (cancelled) return;
+        const loggedInUser = meData?.user ?? null;
+        setUser(loggedInUser);
 
-  const finishSession = async () => {
-    if (isFinishing) return;
-    setIsFinishing(true);
-    stopPublishing();
+        if (loggedInUser) {
+          const today = todayDateStr();
+          const [sessionsRes, meRankRes] = await Promise.all([
+            fetch('/api/tracking/sessions?limit=10').then(r => r.ok ? r.json() : null),
+            fetch(`/api/ranking/me?date=${today}`).then(r => r.ok ? r.json() : null),
+          ]);
+          if (cancelled) return;
+          if (sessionsRes) setData(sessionsRes as StatsResp);
+          if (meRankRes) setMyRank((meRankRes as { rank?: typeof myRank }).rank ?? null);
+        }
+      } catch (e) {
+        console.error('home fetch failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-    try {
-      const jobId = await createTrackingAnalysisJob({
-        meetingId: soloMeetingId,
-        userId: soloUserId,
-        page: 'solo',
-        reason: 'finish',
-      });
-      router.push(`/result?jobId=${encodeURIComponent(jobId)}`);
-    } catch (error) {
-      console.error('Tracking analysis job creation failed:', error);
-      router.push('/result');
+  // 랭킹 — range 가 바뀔 때마다 다시 fetch
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const today = todayDateStr();
+        const res = await fetch(`/api/ranking?date=${today}&range=${activeRange}&limit=20`);
+        const json = res.ok ? await res.json() : null;
+        if (cancelled) return;
+        setLeaderboard((json?.entries as LeaderboardEntry[]) ?? []);
+      } catch (e) {
+        console.error('leaderboard fetch failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeRange]);
+
+  const requireAuth = (next: string) => {
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(next)}`);
+      return false;
     }
+    return true;
   };
 
+  const enterRandomRoom = () => {
+    if (requireAuth('/room?mode=public')) router.push('/room?mode=public');
+  };
+  const createInviteRoom = () => {
+    if (requireAuth('/room?mode=invite-create')) router.push('/room?mode=invite-create');
+  };
+  const joinInviteRoom = () => {
+    const code = inviteCodeInput.trim();
+    if (!code) return;
+    const url = `/room?mode=invite-join&code=${encodeURIComponent(code)}`;
+    if (requireAuth(url)) router.push(url);
+  };
+  const goMeasure = () => {
+    if (requireAuth('/measure')) router.push('/measure');
+  };
+
+  const sortedLeaderboard = useMemo(() => {
+    const arr = [...leaderboard];
+    if (activeCategory === 'time') arr.sort((a, b) => b.validSeconds - a.validSeconds);
+    else if (activeCategory === 'focus') arr.sort((a, b) => b.focusRatio - a.focusRatio);
+    return arr.slice(0, 5);
+  }, [leaderboard, activeCategory]);
+
+  const todayValidSeconds = useMemo(() => {
+    if (!data?.sessions) return 0;
+    const today = new Date().toDateString();
+    return data.sessions
+      .filter((s) => new Date(s.startedAt).toDateString() === today)
+      .reduce((sum, s) => sum + s.durationSeconds, 0);
+  }, [data]);
+
+  const dailyGoalSeconds = 4 * 3600;
+  const progressPct = Math.min(100, Math.round((todayValidSeconds / dailyGoalSeconds) * 100));
+  const remainingSeconds = Math.max(0, dailyGoalSeconds - todayValidSeconds);
+  const sunungDayLeft = dDay(new Date('2026-11-13'));
+
+  const welcomeName = user?.name ?? '게스트';
+  const welcomeMessage = user ? '오늘도 화이팅하세요' : '로그인하면 학습 기록이 시작됩니다';
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex items-center justify-between">
+    <main className="min-h-screen" style={{ background: 'var(--color-bg-soft)' }}>
+      <Navbar user={user} showSignIn />
+
+      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10 lg:py-10">
+        {/* 환영 헤더 */}
+        <section className="mb-6 flex items-end justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Focus Tracking</h1>
-            <p className="text-slate-400">Real-time concentration monitoring dashboard</p>
+            <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-600)' }}>안녕하세요</div>
+            <h1 className="mt-1 text-3xl font-semibold" style={{ color: 'var(--color-brand-900)', letterSpacing: '-0.02em' }}>
+              {welcomeName}님, {welcomeMessage}
+            </h1>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <HeartRateSourceSelector
-              value={heartRateSourcePreference}
-              onChange={setHeartRateSourcePreference}
-              disabled={isFinishing}
-              appleWatchConnected={hasAppleWatchConnection}
-              className="w-56"
-            />
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="rounded-lg border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-800"
-            >
-              Dashboard
+          {user && (
+            <button onClick={goMeasure} className="ft-btn-primary text-sm px-5 py-2.5">
+              <i className="ti ti-player-play text-base" aria-hidden="true" />
+              지금 측정 시작
             </button>
-            <button
-              onClick={() => router.push('/room')}
-              className="rounded-lg bg-cyan-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-500 hover:shadow-cyan-400/40"
-            >
-              Focus Room
-            </button>
-            <button
-              onClick={() => router.push('/tracker')}
-              className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-semibold shadow-lg shadow-blue-500/20 transition hover:shadow-lg hover:shadow-blue-400/40"
-            >
-              Apple Watch Sync
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPaused((current) => !current)}
-              disabled={isFinishing}
-              className={`rounded-lg px-6 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                isPaused
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500'
-                  : 'border border-amber-500/50 text-amber-100 hover:border-amber-400 hover:bg-amber-500/10'
-              }`}
-            >
-              {isPaused ? 'Resume' : 'Pause'}
-            </button>
-          </div>
-        </header>
+          )}
+        </section>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <div className="relative rounded-2xl bg-slate-900/70 p-6 shadow-2xl ring-1 ring-white/5">
-              <WebcamView />
-
-              <div className="absolute right-6 top-6 w-52 space-y-2">
-                <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-slate-600/50">
-                  <p className="text-[10px] uppercase text-slate-400">{isPaused ? 'Paused' : heartRateSource}</p>
-                  <p className="text-3xl font-bold text-red-400">{heartRate > 0 ? heartRate : '--'}</p>
-                  <p className="text-[10px] text-slate-500">{heartRateStatus}</p>
-                </div>
-                <div className="rounded-xl bg-slate-950/90 px-4 py-3 ring-1 ring-emerald-500/30">
-                  <p className="text-[10px] uppercase text-slate-400">{focusSource} 집중 점수</p>
-                  <p className="text-3xl font-bold text-emerald-300">{focusDisplayScore}</p>
-                  <p className="text-[10px] text-slate-500">
-                    Threshold {focusThresholdDisplay} · {focusStatus}
-                  </p>
-                </div>
-                <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} compact />
-              </div>
-              <canvas id="heartbeatCanvas" className="hidden" />
+        {/* 상단 — 오늘 목표 / D-DAY / 측정 CTA */}
+        <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr_1.2fr]">
+          <div className="ft-card">
+            <div className="flex items-center justify-between">
+              <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>오늘 목표</div>
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-brand-500)' }}>{user ? `${progressPct}%` : ''}</span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-semibold" style={{ color: 'var(--color-brand-900)' }}>
+                {user ? formatDuration(todayValidSeconds) : '0분'}
+              </span>
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>/ 4시간</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--color-brand-100)' }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${user ? progressPct : 0}%`, background: 'var(--color-brand-500)' }} />
+            </div>
+            <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {user ? `${formatDuration(remainingSeconds)} 남음` : '로그인 후 표시됩니다'}
             </div>
           </div>
 
-          <aside className="space-y-4">
-            <StatusCard label="Camera" status={isPaused ? 'Paused' : 'Active'} isActive={!isPaused} colorClass="emerald" />
-            <StatusCard
-              label={`Heart Rate (${heartRateSource})`}
-              status={heartRateStatus}
-              isActive={!isPaused && (heartRate > 0 || isHeartRateMeasuring)}
-              colorClass="red"
-            />
-            <StatusCard
-              label="Gaze Tracking"
-              status={isPaused ? 'Paused' : !isLoaded ? 'Loading' : isCalibrated ? 'Calibrated' : 'Calibration required'}
-              isActive={!isPaused && isLoaded && isCalibrated}
-              colorClass="blue"
-            />
+          <div className="ft-card">
+            <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>D-DAY</div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold" style={{ color: 'var(--color-brand-500)' }}>D-{sunungDayLeft > 0 ? sunungDayLeft : 0}</span>
+            </div>
+            <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>2026 수능</div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--color-brand-100)' }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, (1 - sunungDayLeft / 365) * 100))}%`, background: 'var(--color-brand-400)' }} />
+            </div>
+          </div>
 
-            <button
-              onClick={() => void finishSession()}
-              disabled={isFinishing}
-              className="w-full rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 transition hover:shadow-lg hover:shadow-cyan-400/40 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isFinishing ? 'Analyzing...' : 'View Results'}
+          <button onClick={goMeasure} className="ft-card-brand flex flex-col items-start justify-between text-left" style={{ minHeight: 130 }}>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'rgba(255,255,255,0.22)' }}>
+                <i className="ti ti-player-play text-lg" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-xs opacity-90">바로 측정 시작</div>
+                <div className="text-base font-semibold">집중 분석</div>
+              </div>
+            </div>
+            <div className="mt-2 flex w-full items-center justify-between">
+              <span className="text-xs opacity-85">웹캠 + 심박 + 시선 추적</span>
+              <i className="ti ti-arrow-right text-lg" aria-hidden="true" />
+            </div>
+          </button>
+        </section>
+
+        {/* 스터디룸 입장 — 3 카드 가로 */}
+        <section className="mb-6 ft-card">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>스터디룸 입장</div>
+              <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-soft)' }}>혼자 또는 친구와 함께 집중하기</div>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <button onClick={enterRandomRoom} className="ft-action-card">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-500)', color: 'white', boxShadow: 'var(--shadow-brand)' }}>
+                <i className="ti ti-dice text-xl" aria-hidden="true" />
+              </div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>랜덤 매칭</div>
+              <div className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>공개 방에 자동 배정됩니다.</div>
             </button>
-          </aside>
-        </div>
+            <button onClick={createInviteRoom} className="ft-action-card">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-500)', color: 'white', boxShadow: 'var(--shadow-brand)' }}>
+                <i className="ti ti-key text-xl" aria-hidden="true" />
+              </div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>초대코드 방 만들기</div>
+              <div className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>코드 발급 후 친구에게 공유.</div>
+            </button>
+            <div className="ft-action-card" style={{ cursor: 'default' }}>
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-500)', color: 'white', boxShadow: 'var(--shadow-brand)' }}>
+                <i className="ti ti-login text-xl" aria-hidden="true" />
+              </div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>초대코드로 입장</div>
+              <div className="mt-2 flex gap-1.5">
+                <input
+                  type="text"
+                  value={inviteCodeInput}
+                  onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+                  placeholder="ABC123"
+                  maxLength={6}
+                  className="ft-input flex-1 px-2 py-1.5 text-sm"
+                  style={{ background: 'white', textTransform: 'uppercase' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') joinInviteRoom(); }}
+                />
+                <button onClick={joinInviteRoom} className="rounded-md px-3 text-xs font-semibold text-white" style={{ background: 'var(--color-brand-500)' }}>
+                  입장
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 하단 — 최근 세션 / 명예의 전당 (각자 한 줄씩) */}
+        <section className="space-y-4">
+          {/* 최근 세션 */}
+          <div className="ft-card">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>최근 세션</div>
+              {user && <button className="ft-btn-ghost text-xs">전체 보기 →</button>}
+            </div>
+            {!user ? (
+              <div className="py-10 text-center">
+                <i className="ti ti-history text-3xl mx-auto block" aria-hidden="true" style={{ color: 'var(--color-text-muted)' }} />
+                <p className="mt-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>로그인하면 학습 기록이 여기에 표시돼요</p>
+              </div>
+            ) : data && data.sessions.length > 0 ? (
+              <div className="space-y-2">
+                {data.sessions.slice(0, 5).map((s) => (
+                  <div key={s.id} className="ft-rank-row flex items-center justify-between rounded-lg p-2.5" style={{ background: 'var(--color-bg-soft)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'var(--color-brand-100)', color: 'var(--color-brand-700)' }}>
+                        <i className="ti ti-clock text-sm" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>{formatRelativeDate(s.startedAt)}</div>
+                        <div className="text-xs" style={{ color: 'var(--color-text-soft)' }}>{formatDuration(s.durationSeconds)}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-500)' }}>
+                        {s.focusRatio != null ? `${Math.round(s.focusRatio * 100)}%` : '--'}
+                      </div>
+                      <div className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>집중도</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-10 text-center">
+                <i className="ti ti-mood-smile text-3xl mx-auto block" aria-hidden="true" style={{ color: 'var(--color-brand-400)' }} />
+                <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>아직 측정 기록이 없어요</p>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>위 "지금 측정 시작"으로 첫 세션을 만들어보세요</p>
+              </div>
+            )}
+          </div>
+
+          {/* 명예의 전당 */}
+          <div className="ft-card">
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <i className="ti ti-trophy text-base" aria-hidden="true" style={{ color: 'var(--color-brand-500)' }} />
+                  <div className="text-base font-semibold" style={{ color: 'var(--color-brand-900)' }}>
+                    {activeRange === 'day' ? '오늘의' : activeRange === 'week' ? '이번 주' : '이번 달'} 명예의 전당
+                  </div>
+                </div>
+                <div className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>
+                  {activeRange === 'day'
+                    ? '집중 비율 70% + 측정 시간 30% 가중 점수'
+                    : '일별 최고 세션 합산 누적 점수'}
+                </div>
+              </div>
+              {/* Range segmented control */}
+              <div className="flex items-center gap-1 rounded-full p-1" style={{ background: 'var(--color-bg-soft)' }}>
+                {RANGES.map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => setActiveRange(r.key)}
+                    className="rounded-full px-3 py-1 text-xs font-semibold transition-colors"
+                    style={{
+                      background: activeRange === r.key ? 'white' : 'transparent',
+                      color: activeRange === r.key ? 'var(--color-brand-700)' : 'var(--color-text-soft)',
+                      boxShadow: activeRange === r.key ? 'var(--shadow-sm)' : 'none',
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 mb-3 flex flex-wrap gap-1.5">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => setActiveCategory(c.key)}
+                  className={activeCategory === c.key ? 'ft-chip ft-chip-active' : 'ft-chip'}
+                >
+                  <i className={`ti ${c.icon} text-xs`} aria-hidden="true" />
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {sortedLeaderboard.length === 0 ? (
+              <div className="py-10 text-center">
+                <i className="ti ti-confetti text-3xl mx-auto block" aria-hidden="true" style={{ color: 'var(--color-text-muted)' }} />
+                <p className="mt-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  {activeRange === 'day' ? '오늘' : activeRange === 'week' ? '이번 주' : '이번 달'} 아직 랭킹 데이터가 없어요
+                </p>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>첫 1위에 도전해보세요!</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {sortedLeaderboard.map((entry, i) => {
+                  const rank = i + 1;
+                  const isMe = !!user && entry.userId === user.id;
+                  const medalBg = rank === 1 ? '#FEF3C7' : rank === 2 ? '#FED7AA' : rank === 3 ? '#FECDD3' : 'var(--color-brand-50)';
+                  const medalColor = rank === 1 ? '#92400E' : rank === 2 ? '#9A3412' : rank === 3 ? '#9F1239' : 'var(--color-text-soft)';
+                  return (
+                    <div key={entry.userId} className="ft-rank-row flex items-center gap-3 rounded-lg p-2"
+                      style={isMe ? { background: 'var(--color-brand-50)' } : undefined}>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold" style={{ background: medalBg, color: medalColor }}>{rank}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>{entry.displayName}{isMe ? ' (나)' : ''}</div>
+                        <div className="truncate text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{autoComment(entry)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>
+                          {activeCategory === 'score' ? `${Math.round(entry.rankingScore)}점` :
+                           activeCategory === 'time' ? formatTime(entry.validSeconds) :
+                           `${Math.round(entry.focusRatio * 100)}%`}
+                        </div>
+                        <div className="text-[10px]" style={{ color: 'var(--color-text-soft)' }}>
+                          {Math.round(entry.focusRatio * 100)}% · {formatTime(entry.validSeconds)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {user && myRank && !sortedLeaderboard.some((e) => e.userId === user.id) && (
+              <>
+                <div className="my-2 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>···</div>
+                <div className="flex items-center gap-3 rounded-lg p-2.5" style={{ background: 'var(--color-brand-100)' }}>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold" style={{ background: 'var(--color-brand-500)', color: 'white' }}>{myRank.rank}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>{user.name} (나)</div>
+                    <div className="text-[11px]" style={{ color: 'var(--color-brand-600)' }}>시간만 늘리면 탑 5</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>{Math.round(myRank.rankingScore)}점</div>
+                    <div className="text-[10px]" style={{ color: 'var(--color-brand-600)' }}>{formatTime(myRank.validSeconds)}</div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                10분 미만 세션은 제외 · {activeRange === 'day' ? '자정 리셋' : activeRange === 'week' ? '월요일 리셋' : '매월 1일 리셋'}
+              </div>
+              <button className="ft-btn-ghost text-xs">전체 랭킹 →</button>
+            </div>
+          </div>
+        </section>
       </div>
-      <GazeDot
-        x={rawCoordinates.x}
-        y={rawCoordinates.y}
-        visible={!isPaused && isLoaded && isCalibrated && rawCoordinates.x > 0 && rawCoordinates.y > 0}
-      />
-      <GazeCalibrationOverlay
-        active={!isPaused && isLoaded && !isCalibrated}
-        currentPointIndex={currentCalibrationPointIndex}
-        pointClickCount={calibrationPointClickCount}
-        clicksPerPoint={clicksPerCalibrationPoint}
-        totalPoints={totalCalibrationPoints}
-        isBusy={isCalibrationBusy}
-        onPointClick={(point) => recordCalibrationPoint(point.xPercent, point.yPercent)}
-        onReset={() => void resetCalibration()}
-      />
     </main>
   );
 }

@@ -1,16 +1,14 @@
-// components/LoadingView.tsx
-import React from 'react';
-
-const LoadingView: React.FC = () => {
+const LoadingView = () => {
   return (
-    <div className="flex flex-col items-center gap-6 z-50 bg-slate-900 w-full h-full fixed inset-0 justify-center">
-      {/* 로딩 스피너 (회전 애니메이션) */}
-      <div className="w-20 h-20 border-4 border-slate-700 border-t-green-400 rounded-full animate-spin"></div>
-      
+    <div className="fixed inset-0 z-50 flex h-full w-full flex-col items-center justify-center gap-5" style={{ background: 'var(--color-bg)' }}>
+      <div className="h-16 w-16 animate-spin rounded-full border-4" style={{
+        borderColor: 'var(--color-brand-100)',
+        borderTopColor: 'var(--color-brand-500)',
+      }} />
       <div className="text-center">
-        <p className="text-2xl font-bold text-yellow-400 mb-2">AI 시선 추적 모델 준비 중</p>
-        <p className="text-slate-400">카메라 권한을 허용하고 잠시만 기다려주세요.</p>
-        <p className="text-xs text-slate-600 mt-1">(최초 실행 시 10~20초 소요될 수 있습니다.)</p>
+        <p className="text-lg font-medium" style={{ color: 'var(--color-brand-900)' }}>AI 시선 추적 모델 준비 중</p>
+        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-soft)' }}>카메라 권한을 허용하고 잠시만 기다려주세요.</p>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>(최초 실행 시 10~20초 소요)</p>
       </div>
     </div>
   );

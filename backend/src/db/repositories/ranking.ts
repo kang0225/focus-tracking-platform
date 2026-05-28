@@ -319,3 +319,70 @@ export async function getUserDailyRank(input: {
 
 // users import 가 컴파일러에 안 잡히는 경우가 있어 export 로 활용.
 export { users as _usersForJoin };
+
+// ────────────────────────────────────────────────────────────
+// 기간 (주/월) 리더보드 — 일별 best 세션을 SUM 으로 합산.
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 기간 리더보드. startDate ~ endDate (둘 다 inclusive, "YYYY-MM-DD") 안의
+ * "사용자 × 일별 best 세션" 들을 user_id 로 groupBy 해서 합산.
+ *
+ * 정렬: 누적 ranking_score 내림차순.
+ */
+export async function getRangeLeaderboard(input: {
+  startDate: string;
+  endDate: string;
+  limit?: number;
+}): Promise<LeaderboardEntry[]> {
+  const limit = Math.max(1, Math.min(500, input.limit ?? 100));
+
+  const rows = await db.execute(sql`
+    SELECT
+      best_per_day.user_id          AS "userId",
+      sum(best_per_day.ranking_score)::float       AS "rankingScore",
+      sum(best_per_day.high_focus_seconds)::int    AS "highFocusSeconds",
+      sum(best_per_day.valid_seconds)::int         AS "validSeconds",
+      avg(best_per_day.focus_ratio)::float         AS "focusRatio",
+      max(best_per_day.session_id)  AS "bestSessionId",
+      max(best_per_day.ranking_date) AS "rankingDate",
+      u.name                        AS "displayName",
+      u.avatar_url                  AS "avatarUrl"
+    FROM (
+      SELECT DISTINCT ON (user_id, ranking_date)
+        user_id,
+        ranking_date,
+        id AS session_id,
+        ranking_score,
+        coalesce(high_focus_seconds, 0) AS high_focus_seconds,
+        coalesce(valid_seconds, 0)      AS valid_seconds,
+        coalesce(focus_ratio, 0)        AS focus_ratio
+      FROM tracking_sessions
+      WHERE ranking_eligible = true
+        AND ranking_date BETWEEN ${input.startDate} AND ${input.endDate}
+      ORDER BY user_id, ranking_date, ranking_score DESC NULLS LAST, high_focus_seconds DESC NULLS LAST
+    ) AS best_per_day
+    JOIN users u ON u.id = best_per_day.user_id
+    GROUP BY best_per_day.user_id, u.name, u.avatar_url
+    ORDER BY sum(best_per_day.ranking_score) DESC NULLS LAST,
+             sum(best_per_day.high_focus_seconds) DESC NULLS LAST
+    LIMIT ${limit}
+  `);
+
+  const rawRows: Record<string, unknown>[] = Array.isArray(rows)
+    ? (rows as Record<string, unknown>[])
+    : ((rows as { rows?: Record<string, unknown>[] }).rows ?? []);
+
+  return rawRows.map((r, i): LeaderboardEntry => ({
+    rank: i + 1,
+    userId: String(r.userId),
+    displayName: String(r.displayName ?? ''),
+    avatarUrl: r.avatarUrl == null ? null : String(r.avatarUrl),
+    bestSessionId: String(r.bestSessionId ?? ''),
+    rankingScore: Number(r.rankingScore ?? 0),
+    highFocusSeconds: Number(r.highFocusSeconds ?? 0),
+    validSeconds: Number(r.validSeconds ?? 0),
+    focusRatio: Number(r.focusRatio ?? 0),
+    rankingDate: String(r.rankingDate ?? input.endDate),
+  }));
+}

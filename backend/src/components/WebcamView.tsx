@@ -11,7 +11,7 @@ export default function WebcamView() {
     let cancelled = false;
 
     const stopStream = () => {
-      stream?.getTracks().forEach((track) => track.stop());
+      stream?.getTracks().forEach((t) => t.stop());
       stream = null;
       if (videoRef.current) videoRef.current.srcObject = null;
     };
@@ -22,15 +22,12 @@ export default function WebcamView() {
           video: { facingMode: 'user' },
           audio: false,
         });
-
         if (cancelled) {
           stopStream();
           return;
         }
-
         const video = videoRef.current;
         if (!video) return;
-
         video.srcObject = stream;
         video.muted = true;
         await video.play().catch(() => undefined);
@@ -41,7 +38,6 @@ export default function WebcamView() {
     };
 
     void getWebcam();
-
     return () => {
       cancelled = true;
       stopStream();
@@ -49,13 +45,14 @@ export default function WebcamView() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <h2 className="text-xl font-bold mb-4">실시간 집중도 모니터링</h2>
+    <div className="flex flex-col items-center gap-3">
       {error ? (
-        <div className="w-full max-w-2xl rounded-2xl border border-red-500 bg-red-500/10 p-6 text-center text-red-100 shadow-lg">
-          <p className="font-semibold">카메라 접근 실패</p>
-          <p className="mt-2 text-sm text-red-200">{error}</p>
-          <p className="mt-4 text-sm text-slate-300">브라우저 권한을 확인하거나 카메라가 연결되어 있는지 확인하세요.</p>
+        <div className="w-full max-w-2xl rounded-xl px-5 py-4 text-center" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+          <p className="text-sm font-medium">카메라 접근 실패</p>
+          <p className="mt-1 text-xs">{error}</p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-soft)' }}>
+            브라우저 권한을 확인하거나 카메라가 연결되어 있는지 확인하세요.
+          </p>
         </div>
       ) : (
         <video
@@ -64,7 +61,8 @@ export default function WebcamView() {
           autoPlay
           muted
           playsInline
-          className="rounded-lg shadow-lg w-full max-w-2xl border-4 border-blue-500"
+          className="w-full max-w-2xl rounded-xl"
+          style={{ border: '2px solid var(--color-brand-200)' }}
         />
       )}
     </div>
