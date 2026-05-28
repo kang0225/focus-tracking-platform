@@ -15,6 +15,13 @@
       "when": 1779948898399,
       "tag": "0001_ranking",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779999999000,
+      "tag": "0002_user_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -58,3 +58,64 @@ export async function touchUserLogin(id: string): Promise<void> {
     .set({ lastLoginAt: new Date(), updatedAt: sql`now()` })
     .where(eq(users.id, id));
 }
+
+// ────────────────────────────────────────────────────────────
+// 사용자 설정 (메인 대시보드 — 목표 / D-DAY / 각오)
+// ────────────────────────────────────────────────────────────
+
+export interface UserSettings {
+  dailyGoalHours: number;
+  ddayDate: string | null;     // "YYYY-MM-DD"
+  ddayLabel: string | null;
+  dailyMotto: string | null;
+}
+
+export async function getUserSettings(userId: string): Promise<UserSettings> {
+  const rows = await db
+    .select({
+      dailyGoalHours: users.dailyGoalHours,
+      ddayDate: users.ddayDate,
+      ddayLabel: users.ddayLabel,
+      dailyMotto: users.dailyMotto,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const row = rows[0];
+  return {
+    dailyGoalHours: row?.dailyGoalHours ?? 4,
+    ddayDate: row?.ddayDate ?? null,
+    ddayLabel: row?.ddayLabel ?? null,
+    dailyMotto: row?.dailyMotto ?? null,
+  };
+}
+
+export async function updateUserSettings(
+  userId: string,
+  patch: Partial<UserSettings>,
+): Promise<UserSettings> {
+  // 빈 값 / undefined 는 skip 해서 부분 갱신만.
+  const updateValues: Record<string, unknown> = { updatedAt: sql`now()` };
+
+  if (patch.dailyGoalHours != null) {
+    updateValues.dailyGoalHours = Math.max(0.5, Math.min(24, patch.dailyGoalHours));
+  }
+  if (patch.ddayDate !== undefined) {
+    // 빈 문자열은 null 로 정규화.
+    updateValues.ddayDate = patch.ddayDate && patch.ddayDate.length > 0 ? patch.ddayDate : null;
+  }
+  if (patch.ddayLabel !== undefined) {
+    updateValues.ddayLabel = patch.ddayLabel && patch.ddayLabel.length > 0
+      ? patch.ddayLabel.slice(0, 60)
+      : null;
+  }
+  if (patch.dailyMotto !== undefined) {
+    updateValues.dailyMotto = patch.dailyMotto && patch.dailyMotto.length > 0
+      ? patch.dailyMotto.slice(0, 200)
+      : null;
+  }
+
+  await db.update(users).set(updateValues).where(eq(users.id, userId));
+  return getUserSettings(userId);
+}

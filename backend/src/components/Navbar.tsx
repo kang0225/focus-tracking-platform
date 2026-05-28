@@ -10,6 +10,7 @@ interface NavbarProps {
 
 const NAV_ITEMS = [
   { href: '/', label: '홈' },
+  { href: '/dashboard', label: '대시보드' },
   { href: '/tracker', label: 'Apple Watch' },
 ];
 
@@ -80,10 +81,11 @@ export default function Navbar({ user, showSignIn = false }: NavbarProps) {
                   router.push('/');
                   router.refresh();
                 }}
-                className="ft-btn-ghost text-xs"
+                className="ft-btn-ghost flex items-center gap-1 text-sm"
                 aria-label="로그아웃"
               >
                 <i className="ti ti-logout text-base" aria-hidden="true" />
+                로그아웃
               </button>
             </>
           )}

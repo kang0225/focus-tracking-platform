@@ -37,6 +37,20 @@ interface LeaderboardEntry {
 type RankCategory = 'score' | 'time' | 'focus';
 type RankRange = 'day' | 'week' | 'month';
 
+interface UserSettings {
+  dailyGoalHours: number;
+  ddayDate: string | null;     // "YYYY-MM-DD" 또는 null
+  ddayLabel: string | null;
+  dailyMotto: string | null;
+}
+
+const DEFAULT_SETTINGS: UserSettings = {
+  dailyGoalHours: 4,
+  ddayDate: null,
+  ddayLabel: null,
+  dailyMotto: null,
+};
+
 const CATEGORIES: { key: RankCategory; label: string; icon: string }[] = [
   { key: 'score', label: '점수왕', icon: 'ti-trophy' },
   { key: 'time', label: '엉덩이왕', icon: 'ti-armchair' },
@@ -108,6 +122,55 @@ export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState<RankCategory>('score');
   const [activeRange, setActiveRange] = useState<RankRange>('day');
   const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [editingField, setEditingField] = useState<null | 'goal' | 'dday' | 'motto'>(null);
+
+  // DB 에서 설정 로드 — 사용자 로그인 후
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/me/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data?.settings) setSettings(data.settings as UserSettings);
+        }
+      } catch (e) {
+        console.error('settings load failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  /**
+   * 설정을 DB 에 PATCH 로 저장 + 로컬 state 즉시 갱신 (optimistic).
+   * 네트워크 실패해도 UI 는 안 깨짐 — 다음 새로고침 때 DB 값으로 복원.
+   */
+  const updateSettings = async (patch: Partial<UserSettings>) => {
+    setSettings((cur) => ({ ...cur, ...patch }));
+    if (!user) return;
+    try {
+      await fetch('/api/me/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.error('settings save failed:', e);
+    }
+  };
+
+  /**
+   * 편집 버튼 핸들러 — 비로그인 시 로그인 페이지로 redirect.
+   */
+  const tryEdit = (field: 'goal' | 'dday' | 'motto') => {
+    if (!user) {
+      router.push('/login?next=/');
+      return;
+    }
+    setEditingField(editingField === field ? null : field);
+  };
 
   // 사용자 + 본인 세션 데이터 (1회 fetch)
   useEffect(() => {
@@ -193,10 +256,10 @@ export default function HomePage() {
       .reduce((sum, s) => sum + s.durationSeconds, 0);
   }, [data]);
 
-  const dailyGoalSeconds = 4 * 3600;
+  const dailyGoalSeconds = Math.max(1, settings.dailyGoalHours) * 3600;
   const progressPct = Math.min(100, Math.round((todayValidSeconds / dailyGoalSeconds) * 100));
   const remainingSeconds = Math.max(0, dailyGoalSeconds - todayValidSeconds);
-  const sunungDayLeft = dDay(new Date('2026-11-13'));
+  const ddayLeft = settings.ddayDate ? dDay(new Date(settings.ddayDate)) : null;
 
   const welcomeName = user?.name ?? '게스트';
   const welcomeMessage = user ? '오늘도 화이팅하세요' : '로그인하면 학습 기록이 시작됩니다';
@@ -207,34 +270,57 @@ export default function HomePage() {
 
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10 lg:py-10">
         {/* 환영 헤더 */}
-        <section className="mb-6 flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-600)' }}>안녕하세요</div>
-            <h1 className="mt-1 text-3xl font-semibold" style={{ color: 'var(--color-brand-900)', letterSpacing: '-0.02em' }}>
-              {welcomeName}님, {welcomeMessage}
-            </h1>
-          </div>
-          {user && (
-            <button onClick={goMeasure} className="ft-btn-primary text-sm px-5 py-2.5">
-              <i className="ti ti-player-play text-base" aria-hidden="true" />
-              지금 측정 시작
-            </button>
-          )}
+        <section className="mb-6">
+          <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-600)' }}>안녕하세요</div>
+          <h1 className="mt-1 text-3xl font-semibold" style={{ color: 'var(--color-brand-900)', letterSpacing: '-0.02em' }}>
+            {welcomeName}님, {welcomeMessage}
+          </h1>
         </section>
 
         {/* 상단 — 오늘 목표 / D-DAY / 측정 CTA */}
         <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr_1.2fr]">
+          {/* 오늘 목표 카드 (편집 가능) */}
           <div className="ft-card">
             <div className="flex items-center justify-between">
               <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>오늘 목표</div>
-              <span className="text-xs font-semibold" style={{ color: 'var(--color-brand-500)' }}>{user ? `${progressPct}%` : ''}</span>
+              <div className="flex items-center gap-2">
+                {user && <span className="text-xs font-semibold" style={{ color: 'var(--color-brand-500)' }}>{progressPct}%</span>}
+                <button
+                  type="button"
+                  onClick={() => tryEdit('goal')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-blue-50"
+                  style={{ color: 'var(--color-brand-500)' }}
+                  aria-label="목표 설정"
+                >
+                  <i className="ti ti-pencil text-lg" aria-hidden="true" />
+                </button>
+              </div>
             </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold" style={{ color: 'var(--color-brand-900)' }}>
-                {user ? formatDuration(todayValidSeconds) : '0분'}
-              </span>
-              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>/ 4시간</span>
-            </div>
+            {editingField === 'goal' ? (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  step="0.5"
+                  value={settings.dailyGoalHours}
+                  onChange={(e) => updateSettings({ dailyGoalHours: Math.max(1, Number(e.target.value) || 1) })}
+                  className="ft-input w-20 px-2 py-1 text-base font-semibold"
+                  style={{ color: 'var(--color-brand-900)' }}
+                  autoFocus
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setEditingField(null); }}
+                />
+                <span className="text-sm" style={{ color: 'var(--color-text-soft)' }}>시간</span>
+              </div>
+            ) : (
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-semibold" style={{ color: 'var(--color-brand-900)' }}>
+                  {user ? formatDuration(todayValidSeconds) : '0분'}
+                </span>
+                <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>/ {settings.dailyGoalHours}시간</span>
+              </div>
+            )}
             <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--color-brand-100)' }}>
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${user ? progressPct : 0}%`, background: 'var(--color-brand-500)' }} />
             </div>
@@ -243,15 +329,50 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* D-DAY 카드 (편집 가능) */}
           <div className="ft-card">
-            <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>D-DAY</div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-3xl font-semibold" style={{ color: 'var(--color-brand-500)' }}>D-{sunungDayLeft > 0 ? sunungDayLeft : 0}</span>
+            <div className="flex items-center justify-between">
+              <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>D-DAY</div>
+              <button
+                type="button"
+                onClick={() => tryEdit('dday')}
+                className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-blue-50"
+                style={{ color: 'var(--color-brand-500)' }}
+                aria-label="D-DAY 설정"
+              >
+                <i className="ti ti-pencil text-lg" aria-hidden="true" />
+              </button>
             </div>
-            <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>2026 수능</div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--color-brand-100)' }}>
-              <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, (1 - sunungDayLeft / 365) * 100))}%`, background: 'var(--color-brand-400)' }} />
-            </div>
+            {editingField === 'dday' ? (
+              <div className="mt-2 space-y-1.5">
+                <input
+                  type="date"
+                  value={settings.ddayDate ?? ''}
+                  onChange={(e) => updateSettings({ ddayDate: e.target.value || null })}
+                  className="ft-input w-full px-2 py-1 text-sm"
+                />
+                <input
+                  type="text"
+                  value={settings.ddayLabel ?? ''}
+                  onChange={(e) => updateSettings({ ddayLabel: e.target.value })}
+                  placeholder="예: 2026 수능"
+                  className="ft-input w-full px-2 py-1 text-xs"
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setEditingField(null); }}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="mt-2 text-3xl font-semibold" style={{ color: 'var(--color-brand-500)' }}>
+                  {ddayLeft == null
+                    ? '미설정'
+                    : ddayLeft > 0 ? `D-${ddayLeft}` : ddayLeft === 0 ? 'D-DAY' : `D+${Math.abs(ddayLeft)}`}
+                </div>
+                <div className="mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {settings.ddayLabel ?? (ddayLeft == null ? '날짜를 설정해주세요' : '라벨 없음')}
+                </div>
+              </>
+            )}
           </div>
 
           <button onClick={goMeasure} className="ft-card-brand flex flex-col items-start justify-between text-left" style={{ minHeight: 130 }}>
@@ -269,6 +390,42 @@ export default function HomePage() {
               <i className="ti ti-arrow-right text-lg" aria-hidden="true" />
             </div>
           </button>
+        </section>
+
+        {/* 오늘의 각오 (편집 가능) */}
+        <section className="ft-card mb-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="text-sm" style={{ color: 'var(--color-text-soft)' }}>오늘의 각오</div>
+              {editingField === 'motto' ? (
+                <input
+                  type="text"
+                  value={settings.dailyMotto ?? ''}
+                  onChange={(e) => updateSettings({ dailyMotto: e.target.value })}
+                  placeholder="예: 이번 달 200시간 채우기. 매일 4시간씩."
+                  maxLength={200}
+                  className="ft-input mt-1.5 w-full px-2 py-1 text-base"
+                  style={{ color: 'var(--color-brand-900)' }}
+                  autoFocus
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setEditingField(null); }}
+                />
+              ) : (
+                <div className="mt-1 text-base" style={{ color: settings.dailyMotto ? 'var(--color-brand-900)' : 'var(--color-text-muted)' }}>
+                  {settings.dailyMotto ?? '클릭해서 각오를 작성하세요 (예: 이번 달 200시간 채우기)'}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => tryEdit('motto')}
+              className="ml-3 flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-blue-50"
+              style={{ color: 'var(--color-brand-500)' }}
+              aria-label="각오 편집"
+            >
+              <i className="ti ti-pencil text-lg" aria-hidden="true" />
+            </button>
+          </div>
         </section>
 
         {/* 스터디룸 입장 — 3 카드 가로 */}
