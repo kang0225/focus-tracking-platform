@@ -40,8 +40,10 @@ function getDatabaseUrl(): string {
   if (host && user && dbName) {
     const encodedUser = encodeURIComponent(user);
     const encodedPass = encodeURIComponent(password);
-    const sslSuffix = process.env.NODE_ENV === 'production' ? '?sslmode=require' : '';
-    return `postgres://${encodedUser}:${encodedPass}@${host}:${port}/${dbName}${sslSuffix}`;
+    // SSL 은 connectionString 의 ?sslmode 가 아니라 아래 Pool 의 ssl 옵션 한 군데에서만
+    // 제어한다. 양쪽에 두면 pg 가 둘을 충돌시켜 cert 검증이 의도와 달리 재활성화되는
+    // 경우가 있어 "self-signed cert in chain" 에러가 남.
+    return `postgres://${encodedUser}:${encodedPass}@${host}:${port}/${dbName}`;
   }
 
   throw new Error(
@@ -58,12 +60,16 @@ function createPool(): Pool {
     connectionString: getDatabaseUrl(),
     max: Number.isFinite(max) ? max : 10,
     idleTimeoutMillis: Number.isFinite(idleTimeoutMillis) ? idleTimeoutMillis : 30_000,
-    // RDS 는 sslmode=require 를 connection string 으로 받지만, pg 가 그것을 강제로
-    // CA 검증까지 요구하므로 운영에선 별도 ssl 옵션을 켜는 것이 안전.
+    // production: TLS 강제 + CA 검증은 건너뜀. AWS RDS 가 자체 CA 로 서명한 인증서를
+    // 쓰는데 Node 의 기본 신뢰 저장소에 그 CA 가 없어서 "self-signed cert in chain"
+    // 에러가 남. truthy 한 ssl 객체를 넘기면 pg 가 자동으로 SSL 을 켜고,
+    // rejectUnauthorized: false 로 CA 검증만 끔. 트래픽 자체는 그대로 암호화되며
+    // VPC 프라이빗 서브넷 + db_sg 로 접근 제어는 별도로 되어 있다.
+    // CA 검증까지 원하면 RDS CA bundle 을 컨테이너에 포함시켜 ca 옵션 명시 (후속 PR).
     ssl:
       process.env.NODE_ENV === 'production'
         ? { rejectUnauthorized: false }
-        : undefined,
+        : false,
   });
 
   pool.on('error', (err) => {
