@@ -62,12 +62,12 @@ resource "aws_appautoscaling_policy" "ecs_cpu" {
     # - 55% 넘으면 Task 추가 트리거
     # - t4g standard 크레딧 모드 → baseline(40%) 근처 유지 위해 보수적으로 설정
     # - Auto Scaling 지연(약 2~3분) 동안 응답 품질 유지 가능
-    target_value = 55.0
+    target_value = 75.0
 
     # 쿨다운 (한 번 스케일하면 이 시간 동안 다음 스케일 안 함)
     # scale_out_cooldown: 늘릴 때 60초 → 빠르게 대응
     # scale_in_cooldown: 줄일 때 300초 → 너무 빨리 줄여서 다시 늘릴 일 없게
-    scale_out_cooldown = 60
+    scale_out_cooldown = 300
     scale_in_cooldown  = 300
 
     # false = 자동으로 줄이기도 함 (부하 낮아지면 Task 1개로 복귀)
