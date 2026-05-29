@@ -185,7 +185,7 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     paused: isPaused || !isVideoEnabled,
     data: {
       meetingId: room?.roomId ?? '',
-      userId: clientId,
+      // userId 는 백엔드가 세션 토큰에서 강제 주입.
       heartRate,
       heartRateSource,
       heartRateStatus,
@@ -214,7 +214,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
       if (currentRoomId) {
         jobId = await createTrackingAnalysisJob({
           meetingId: currentRoomId,
-          userId: clientId,
           page: 'room',
           reason: 'leave',
         });

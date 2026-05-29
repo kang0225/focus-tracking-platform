@@ -34,7 +34,7 @@ export default function MeasurePage() {
   const [isPaused, setIsPaused] = useState(false);
   const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const soloMeetingId = useMemo(() => makeTrackingId('solo'), []);
-  const soloUserId = useMemo(() => makeTrackingId('user'), []);
+  // userId 는 백엔드가 인증된 세션으로부터 강제 주입하므로 클라이언트에서 생성하지 않음.
 
   const {
     coordinates,
@@ -70,7 +70,6 @@ export default function MeasurePage() {
     paused: isPaused,
     data: {
       meetingId: soloMeetingId,
-      userId: soloUserId,
       heartRate,
       heartRateSource,
       heartRateStatus,
@@ -96,7 +95,6 @@ export default function MeasurePage() {
     try {
       const jobId = await createTrackingAnalysisJob({
         meetingId: soloMeetingId,
-        userId: soloUserId,
         page: 'solo',
         reason: 'finish',
       });

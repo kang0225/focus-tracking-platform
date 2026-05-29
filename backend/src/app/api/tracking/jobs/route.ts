@@ -55,14 +55,13 @@ interface MlAnalyzeResponse {
   }[];
 }
 
-function isValidRequest(value: unknown): value is TrackingAnalysisJobRequest {
+// userId 는 서버에서 session.user.id 로 강제 주입하므로 body 검증에서 제외.
+function isValidRequest(value: unknown): value is Omit<TrackingAnalysisJobRequest, 'userId'> {
   if (!value || typeof value !== 'object') return false;
 
   const body = value as Partial<TrackingAnalysisJobRequest>;
   return typeof body.meetingId === 'string'
     && body.meetingId.length > 0
-    && typeof body.userId === 'string'
-    && body.userId.length > 0
     && (body.page === 'solo' || body.page === 'room')
     && (body.reason === 'finish' || body.reason === 'leave')
     && typeof body.requestedAt === 'string';
