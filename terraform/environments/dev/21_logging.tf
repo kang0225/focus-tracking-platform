@@ -65,38 +65,31 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 ##############################################
 #### 2. ALB Access Logs 권한               ####
 ##############################################
-# 서울 리전 ALB 서비스 계정 (한국 = 600734575887)
-data "aws_elb_service_account" "main" {}
-
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # ALB 로그 전달 서비스가 access log 객체를 지정된 S3 prefix에 업로드할 수 있게 허용
       {
-        Sid       = "AllowALBLogDelivery"
+        Sid       = "AllowALBLogDeliveryWrite"
         Effect    = "Allow"
-        Principal = { AWS = data.aws_elb_service_account.main.arn }
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-      },
-      {
-        Sid       = "AllowLogDeliveryWrite"
-        Effect    = "Allow"
-        Principal = { Service = "delivery.logs.amazonaws.com" }
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        # 현재 AWS 계정/리전의 Load Balancer에서 온 로그 전달 요청만 허용
         Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.current.account_id}:loadbalancer/*"
           }
         }
       },
+      # ALB 로그 전달 서비스가 로그 업로드 전에 버킷 ACL/소유권을 확인할 수 있게 허용
       {
-        Sid       = "AllowLogDeliveryCheck"
+        Sid       = "AllowALBLogDeliveryAclCheck"
         Effect    = "Allow"
-        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
         Action    = "s3:GetBucketAcl"
         Resource  = aws_s3_bucket.logs.arn
       }
