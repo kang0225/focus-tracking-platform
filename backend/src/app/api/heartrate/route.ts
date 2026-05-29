@@ -89,8 +89,11 @@ export async function POST(request: Request) {
     }
     const userId = codeRow.issuerUserId;
 
-    // 입력 정규화
-    const heartRate = finiteNumber(body.heartRate) ?? 0;
+    const previousMetrics = await redis.getLiveMetrics(userId);
+
+    // 입력 정규화. 심박 단독 payload가 focus 값을 0으로 덮어쓰지 않도록
+    // focus 관련 값은 새 값이 있을 때만 갱신하고, 없으면 기존 live metrics를 유지한다.
+    const heartRate = finiteNumber(body.heartRate) ?? previousMetrics?.heartRate ?? 0;
     const focusScore = firstFiniteNumber([
       body.focusScore,
       body.score,
@@ -106,13 +109,17 @@ export async function POST(request: Request) {
     const calculatedFocus = focusScore == null
       ? null
       : classifyAndUpdateFocusThreshold(focusScore, getWatchFocusThresholdState(pairingCode));
-    const nextFocusThreshold = calculatedFocus?.thresholdRawScore ?? focusThreshold ?? null;
+    const nextFocusScore = focusScore ?? previousMetrics?.focusScore ?? 0;
+    const nextFocusThreshold = calculatedFocus?.thresholdRawScore
+      ?? focusThreshold
+      ?? previousMetrics?.focusThreshold
+      ?? null;
     const focusIsFocused = optionalBoolean(body.focusIsFocused)
       ?? optionalBoolean(body.isFocused)
       ?? optionalBoolean(body.focused)
       ?? (focusScore != null && nextFocusThreshold != null
         ? focusScore >= nextFocusThreshold
-        : null);
+        : previousMetrics?.focusIsFocused ?? null);
     const hasWatchMetrics = heartRate > 0 || focusScore != null || nextFocusThreshold != null;
 
     // Redis live metrics 갱신 — PC 쪽이 /api/pair/current 에서 읽어감.
@@ -121,8 +128,10 @@ export async function POST(request: Request) {
       gazeY: 0,
       heartRate,
       heartRateSource: 'Apple Watch',
-      focusScore: focusScore ?? 0,
-      focusSource: 'Apple Watch',
+      focusScore: nextFocusScore,
+      focusSource: focusScore != null || previousMetrics?.focusSource === 'Apple Watch'
+        ? 'Apple Watch'
+        : previousMetrics?.focusSource ?? 'Apple Watch',
       focusThreshold: nextFocusThreshold,
       focusIsFocused,
       updatedAt: Date.now(),
