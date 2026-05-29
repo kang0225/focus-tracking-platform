@@ -97,16 +97,21 @@ export const getGoogleRedirectUri = (request: Request) => {
 };
 
 /**
- * sid + exp 를 HMAC 으로 서명해 쿠키에 넣을 토큰 문자열 생성.
+ * sid + userId + exp 를 HMAC 으로 서명해 쿠키에 넣을 토큰 문자열 생성.
  * Edge runtime 에서도 서명 검증만으로 통과시킬 수 있음.
+ * userId 를 토큰에 포함시켜 빈번하게 호출되는 endpoint (예: /api/tracking/stream)
+ * 가 DB lookup 없이도 user_id 를 신뢰할 수 있게 함 (HMAC 서명되어 위조 불가).
  */
-export const createSessionToken = (input: { sid: string; expiresAt: number }) => {
-  const payload = base64UrlEncode(JSON.stringify({ sid: input.sid, exp: input.expiresAt }));
+export const createSessionToken = (input: { sid: string; userId: string; expiresAt: number }) => {
+  const payload = base64UrlEncode(
+    JSON.stringify({ sid: input.sid, uid: input.userId, exp: input.expiresAt }),
+  );
   return `${payload}.${sign(payload)}`;
 };
 
 interface TokenClaims {
   sid: string;
+  userId: string;
   expiresAt: number;
 }
 
@@ -127,10 +132,15 @@ export const verifySessionToken = (token?: string): TokenClaims | null => {
   if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null;
 
   try {
-    const decoded = JSON.parse(base64UrlDecode(payload)) as { sid?: string; exp?: number };
+    const decoded = JSON.parse(base64UrlDecode(payload)) as {
+      sid?: string;
+      uid?: string;
+      exp?: number;
+    };
     if (typeof decoded.sid !== 'string' || typeof decoded.exp !== 'number') return null;
+    if (typeof decoded.uid !== 'string' || decoded.uid.length === 0) return null;
     if (decoded.exp <= Date.now()) return null;
-    return { sid: decoded.sid, expiresAt: decoded.exp };
+    return { sid: decoded.sid, userId: decoded.uid, expiresAt: decoded.exp };
   } catch {
     return null;
   }

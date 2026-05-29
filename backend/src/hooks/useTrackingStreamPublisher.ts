@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface TrackingStreamData {
   meetingId: string;
-  userId: string;
   heartRate: number;
   heartRateSource: string;
   heartRateStatus?: string;
@@ -35,7 +34,6 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
   if (paused) {
     return {
       meetingId: latest.meetingId,
-      userId: latest.userId,
       timestamp: new Date().toISOString(),
       heartRate: 0,
       heartRateSource: 'paused',
@@ -59,7 +57,6 @@ function buildPayload(latest: TrackingStreamData, paused: boolean) {
 
   return {
     meetingId: latest.meetingId,
-    userId: latest.userId,
     timestamp: new Date().toISOString(),
     heartRate: latest.heartRate,
     heartRateSource: latest.heartRateSource,
@@ -126,8 +123,8 @@ export function useTrackingStreamPublisher({ enabled = true, paused = false, dat
   }, []);
 
   const canPublish = useMemo(() => (
-    enabled && !paused && data.isTrackingReady && data.meetingId.length > 0 && data.userId.length > 0
-  ), [data.isTrackingReady, data.meetingId.length, data.userId.length, enabled, paused]);
+    enabled && !paused && data.isTrackingReady && data.meetingId.length > 0
+  ), [data.isTrackingReady, data.meetingId.length, enabled, paused]);
 
   useEffect(() => {
     if (!canPublish || stoppedRef.current) return undefined;

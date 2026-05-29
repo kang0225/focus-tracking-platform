@@ -194,9 +194,12 @@ export async function sendRedisCommand(args: string[]) {
   });
 }
 
+/**
+ * 클라이언트가 매 초 보내는 측정 페이로드.
+ * userId 는 서버에서 인증된 세션으로부터 채워지므로 클라이언트는 보내지 않는다.
+ */
 export interface TrackingStreamPayload {
   meetingId: string;
-  userId: string;
   timestamp: string;
   heartRate: number;
   heartRateSource: string;
@@ -217,9 +220,13 @@ export interface TrackingStreamPayload {
   page?: 'solo' | 'room';
 }
 
-export async function appendTrackingStream(payload: TrackingStreamPayload) {
-  const jsonData = JSON.stringify(payload);
-  const key = `tracking:${payload.meetingId}:${payload.userId}:stream`;
+/**
+ * userId 는 별도 파라미터로 받아 키 생성에만 사용 (페이로드에는 포함하지 않음).
+ * 서버 사이드에서 세션 토큰으로부터 user_id 를 강제로 주입한다.
+ */
+export async function appendTrackingStream(payload: TrackingStreamPayload, userId: string) {
+  const jsonData = JSON.stringify({ ...payload, userId });
+  const key = `tracking:${payload.meetingId}:${userId}:stream`;
   const id = await sendRedisCommand([
     'XADD',
     key,
@@ -234,9 +241,13 @@ export async function appendTrackingStream(payload: TrackingStreamPayload) {
   return { key, id };
 }
 
+/**
+ * 클라이언트가 보내는 분석 요청.
+ * userId 는 서버에서 세션으로부터 채워지므로 클라이언트 body 에는 포함되지 않는다.
+ */
 export interface TrackingAnalysisJobRequest {
   meetingId: string;
-  userId: string;
+  userId: string; // 서버 사이드 라우트에서 session.user.id 로 강제 주입
   page: 'solo' | 'room';
   reason: 'finish' | 'leave';
   requestedAt: string;

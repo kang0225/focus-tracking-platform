@@ -91,9 +91,10 @@ export async function GET(request: Request) {
       ttlMs: SESSION_MAX_AGE_SECONDS * 1000,
     });
 
-    // 3) sid 토큰 (HMAC 서명) 으로 쿠키 발급.
+    // 3) sid + uid 토큰 (HMAC 서명) 으로 쿠키 발급.
     const cookieToken = createSessionToken({
       sid: rawToken,
+      userId: user.id,
       expiresAt: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
     });
 

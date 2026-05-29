@@ -12,8 +12,6 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
   const payload = value as Partial<TrackingStreamPayload>;
   return typeof payload.meetingId === 'string'
     && payload.meetingId.length > 0
-    && typeof payload.userId === 'string'
-    && payload.userId.length > 0
     && typeof payload.timestamp === 'string'
     && typeof payload.heartRate === 'number'
     && typeof payload.heartRateSource === 'string'
@@ -26,6 +24,7 @@ function isValidPayload(value: unknown): value is TrackingStreamPayload {
 export async function POST(request: Request) {
   try {
     // 매 초 호출되는 endpoint — sessions 테이블 lookup 비싸므로 서명만 검증.
+    // userId 는 HMAC 서명된 토큰에 박혀있어 위조 불가, DB lookup 없이 안전하게 사용.
     const cookieStore = await cookies();
     const claims = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
     if (!claims) {
@@ -37,7 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'invalid tracking payload' }, { status: 400 });
     }
 
-    const result = await appendTrackingStream(body);
+    // 클라이언트가 보낸 어떤 userId 도 신뢰하지 않고, 인증된 세션의 user_id 를 강제 사용.
+    const result = await appendTrackingStream(body, claims.userId);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'tracking stream write failed';

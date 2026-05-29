@@ -4,19 +4,18 @@ import { useCallback } from 'react';
 
 interface CreateTrackingAnalysisJobArgs {
   meetingId: string;
-  userId: string;
   page: 'solo' | 'room';
   reason: 'finish' | 'leave';
 }
 
+// userId 는 백엔드 라우트에서 인증된 세션으로부터 채워지므로 클라이언트는 보내지 않는다.
 export function useTrackingAnalysisJob() {
-  return useCallback(async ({ meetingId, userId, page, reason }: CreateTrackingAnalysisJobArgs) => {
+  return useCallback(async ({ meetingId, page, reason }: CreateTrackingAnalysisJobArgs) => {
     const response = await fetch('/api/tracking/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         meetingId,
-        userId,
         page,
         reason,
         requestedAt: new Date().toISOString(),
