@@ -136,30 +136,370 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
   }
 
   statement {
-    sid    = "AllowTerraformInfraManagement"
+    sid    = "AllowEC2Management"
     effect = "Allow"
 
     actions = [
-      "ec2:*",
-      "elasticloadbalancing:*",
-      "autoscaling:*",
-      "application-autoscaling:*",
-      "ecr:*",
-      "ecs:*",
-      "logs:*",
-      "cloudwatch:*",
-      "route53:*",
-      "acm:*",
-      "s3:*",
-      "iam:*",
-      "rds:*",
-      "secretsmanager:*",
-      "kms:*",
-      "ssm:*",
-      "codedeploy:*",
-      "sns:*",
-      "firehose:*",
-      "lambda:*"
+      "ec2:CreateVpc", "ec2:DescribeVpcs", "ec2:DeleteVpc",
+      "ec2:ModifyVpcAttribute", "ec2:DescribeVpcAttribute",
+      "ec2:CreateSubnet", "ec2:DescribeSubnets", "ec2:DeleteSubnet", "ec2:ModifySubnetAttribute",
+      "ec2:CreateInternetGateway", "ec2:DescribeInternetGateways", "ec2:DeleteInternetGateway",
+      "ec2:AttachInternetGateway", "ec2:DetachInternetGateway",
+      "ec2:CreateRouteTable", "ec2:DescribeRouteTables", "ec2:DeleteRouteTable",
+      "ec2:CreateRoute", "ec2:DeleteRoute", "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable",
+      "ec2:AllocateAddress", "ec2:DescribeAddresses", "ec2:ReleaseAddress",
+      "ec2:AssociateAddress", "ec2:DisassociateAddress",
+      "ec2:CreateNatGateway", "ec2:DescribeNatGateways", "ec2:DeleteNatGateway",
+      "ec2:CreateSecurityGroup", "ec2:DescribeSecurityGroups", "ec2:DeleteSecurityGroup",
+      "ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
+      "ec2:DescribeSecurityGroupRules",
+      "ec2:CreateNetworkAcl", "ec2:DescribeNetworkAcls", "ec2:DeleteNetworkAcl",
+      "ec2:CreateNetworkAclEntry", "ec2:DeleteNetworkAclEntry",
+      "ec2:ReplaceNetworkAclEntry", "ec2:ReplaceNetworkAclAssociation",
+      "ec2:CreateVpcEndpoint", "ec2:DescribeVpcEndpoints", "ec2:DeleteVpcEndpoints",
+      "ec2:ModifyVpcEndpoint", "ec2:DescribePrefixLists",
+      "ec2:RunInstances", "ec2:DescribeInstances", "ec2:TerminateInstances",
+      "ec2:ModifyInstanceAttribute", "ec2:DescribeInstanceStatus",
+      "ec2:CreateLaunchTemplate", "ec2:DescribeLaunchTemplates", "ec2:DeleteLaunchTemplate",
+      "ec2:CreateLaunchTemplateVersion", "ec2:DescribeLaunchTemplateVersions",
+      "ec2:CreateFlowLogs", "ec2:DescribeFlowLogs", "ec2:DeleteFlowLogs",
+      "ec2:CreateTags", "ec2:DeleteTags", "ec2:DescribeTags",
+      "ec2:DescribeAvailabilityZones", "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypes", "ec2:DescribeAccountAttributes",
+      "ec2:DescribeNetworkInterfaces",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowELBManagement"
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DeleteLoadBalancer", "elasticloadbalancing:ModifyLoadBalancerAttributes",
+      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      "elasticloadbalancing:SetSecurityGroups", "elasticloadbalancing:SetSubnets",
+      "elasticloadbalancing:SetIpAddressType",
+      "elasticloadbalancing:CreateListener", "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DeleteListener", "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:CreateTargetGroup", "elasticloadbalancing:DescribeTargetGroups",
+      "elasticloadbalancing:DeleteTargetGroup", "elasticloadbalancing:ModifyTargetGroup",
+      "elasticloadbalancing:ModifyTargetGroupAttributes", "elasticloadbalancing:DescribeTargetGroupAttributes",
+      "elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets",
+      "elasticloadbalancing:DescribeTargetHealth",
+      "elasticloadbalancing:CreateRule", "elasticloadbalancing:DescribeRules",
+      "elasticloadbalancing:DeleteRule", "elasticloadbalancing:ModifyRule",
+      "elasticloadbalancing:AddTags", "elasticloadbalancing:RemoveTags",
+      "elasticloadbalancing:DescribeTags",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowAutoScalingManagement"
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:CreateAutoScalingGroup", "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DeleteAutoScalingGroup", "autoscaling:UpdateAutoScalingGroup",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:CreateOrUpdateTags", "autoscaling:DeleteTags", "autoscaling:DescribeTags",
+      "autoscaling:DescribeLifecycleHooks", "autoscaling:PutLifecycleHook",
+      "autoscaling:DeleteLifecycleHook",
+      "autoscaling:DescribeAutoScalingInstances", "autoscaling:DescribeLoadBalancerTargetGroups",
+      "autoscaling:AttachLoadBalancerTargetGroups", "autoscaling:DetachLoadBalancerTargetGroups",
+      "autoscaling:DescribeTerminationPolicyTypes", "autoscaling:DescribeAdjustmentTypes",
+      "autoscaling:DescribeMetricCollectionTypes",
+      "autoscaling:EnableMetricsCollection", "autoscaling:DisableMetricsCollection",
+      "autoscaling:DescribeNotificationConfigurations",
+      "autoscaling:SuspendProcesses", "autoscaling:ResumeProcesses",
+      "application-autoscaling:RegisterScalableTarget", "application-autoscaling:DescribeScalableTargets",
+      "application-autoscaling:DeregisterScalableTarget",
+      "application-autoscaling:PutScalingPolicy", "application-autoscaling:DescribeScalingPolicies",
+      "application-autoscaling:DeleteScalingPolicy",
+      "application-autoscaling:DescribeScalingActivities",
+      "application-autoscaling:TagResource", "application-autoscaling:UntagResource",
+      "application-autoscaling:ListTagsForResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowECSManagement"
+    effect = "Allow"
+
+    actions = [
+      "ecs:CreateCluster", "ecs:DescribeClusters", "ecs:DeleteCluster", "ecs:UpdateCluster",
+      "ecs:ListClusters",
+      "ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition",
+      "ecs:DeregisterTaskDefinition", "ecs:ListTaskDefinitions",
+      "ecs:CreateService", "ecs:DescribeServices", "ecs:DeleteService", "ecs:UpdateService",
+      "ecs:CreateCapacityProvider", "ecs:DescribeCapacityProviders",
+      "ecs:DeleteCapacityProvider", "ecs:UpdateCapacityProvider",
+      "ecs:PutClusterCapacityProviders",
+      "ecs:TagResource", "ecs:UntagResource", "ecs:ListTagsForResource",
+      "ecs:DescribeTasks", "ecs:ListTasks",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowECRManagement"
+    effect = "Allow"
+
+    actions = [
+      "ecr:CreateRepository", "ecr:DescribeRepositories", "ecr:DeleteRepository",
+      "ecr:GetRepositoryPolicy", "ecr:SetRepositoryPolicy", "ecr:DeleteRepositoryPolicy",
+      "ecr:PutLifecyclePolicy", "ecr:GetLifecyclePolicy", "ecr:DeleteLifecyclePolicy",
+      "ecr:PutImageTagMutability", "ecr:PutImageScanningConfiguration",
+      "ecr:ListTagsForResource", "ecr:TagResource", "ecr:UntagResource",
+      "ecr:DescribeImages",
+      # Docker push (GitHub Actions CI/CD)
+      "ecr:GetAuthorizationToken",
+      "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
+      "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCloudWatchManagement"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup", "logs:DescribeLogGroups", "logs:DeleteLogGroup",
+      "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:DeleteLogStream",
+      "logs:PutSubscriptionFilter", "logs:DescribeSubscriptionFilters",
+      "logs:DeleteSubscriptionFilter",
+      "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy",
+      "logs:ListTagsLogGroup", "logs:TagLogGroup", "logs:UntagLogGroup",
+      "logs:ListTagsForResource", "logs:TagResource", "logs:UntagResource",
+      "logs:DescribeResourcePolicies", "logs:PutResourcePolicy",
+      "cloudwatch:PutMetricAlarm", "cloudwatch:DescribeAlarms", "cloudwatch:DeleteAlarms",
+      "cloudwatch:ListTagsForResource", "cloudwatch:TagResource", "cloudwatch:UntagResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowRoute53ACMManagement"
+    effect = "Allow"
+
+    actions = [
+      "route53:ListHostedZones", "route53:ListHostedZonesByName",
+      "route53:GetHostedZone", "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets", "route53:GetChange",
+      "route53:ListTagsForResource", "route53:ChangeTagsForResource",
+      "acm:RequestCertificate", "acm:DescribeCertificate", "acm:DeleteCertificate",
+      "acm:AddTagsToCertificate", "acm:ListTagsForCertificate",
+      "acm:RemoveTagsFromCertificate", "acm:ListCertificates",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowS3Management"
+    effect = "Allow"
+
+    actions = [
+      "s3:CreateBucket", "s3:HeadBucket", "s3:DeleteBucket", "s3:GetBucketLocation",
+      "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy",
+      "s3:GetBucketVersioning", "s3:PutBucketVersioning",
+      "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration",
+      "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
+      "s3:GetBucketLifecycleConfiguration", "s3:PutBucketLifecycleConfiguration",
+      "s3:DeleteBucketLifecycle",
+      "s3:GetBucketLogging", "s3:PutBucketLogging",
+      "s3:GetBucketAcl",
+      "s3:GetBucketTagging", "s3:PutBucketTagging",
+      "s3:GetBucketOwnershipControls",
+      "s3:ListBucket", "s3:GetObject", "s3:PutObject",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowIAMManagement"
+    effect = "Allow"
+
+    actions = [
+      "iam:CreateRole", "iam:GetRole", "iam:DeleteRole", "iam:UpdateAssumeRolePolicy",
+      "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:ListAttachedRolePolicies",
+      "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy", "iam:ListRolePolicies",
+      "iam:CreatePolicy", "iam:GetPolicy", "iam:DeletePolicy",
+      "iam:CreatePolicyVersion", "iam:GetPolicyVersion",
+      "iam:DeletePolicyVersion", "iam:ListPolicyVersions",
+      "iam:CreateInstanceProfile", "iam:GetInstanceProfile", "iam:DeleteInstanceProfile",
+      "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
+      "iam:ListInstanceProfilesForRole",
+      "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags",
+      "iam:TagPolicy", "iam:UntagPolicy", "iam:ListPolicyTags",
+      "iam:CreateServiceLinkedRole",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowPassRoleToAWSServices"
+    effect = "Allow"
+
+    actions = ["iam:PassRole"]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values = [
+        "ec2.amazonaws.com",
+        "ecs-tasks.amazonaws.com",
+        "codedeploy.amazonaws.com",
+        "firehose.amazonaws.com",
+        "lambda.amazonaws.com",
+        "logs.amazonaws.com",
+        "scheduler.amazonaws.com",
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowRDSManagement"
+    effect = "Allow"
+
+    actions = [
+      "rds:CreateDBInstance", "rds:DescribeDBInstances",
+      "rds:DeleteDBInstance", "rds:ModifyDBInstance",
+      "rds:CreateDBSubnetGroup", "rds:DescribeDBSubnetGroups",
+      "rds:DeleteDBSubnetGroup", "rds:ModifyDBSubnetGroup",
+      "rds:AddTagsToResource", "rds:RemoveTagsFromResource", "rds:ListTagsForResource",
+      "rds:DescribeDBEngineVersions", "rds:DescribeOrderableDBInstanceOptions",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowSecretsManagerManagement"
+    effect = "Allow"
+
+    actions = [
+      "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret",
+      "secretsmanager:DeleteSecret", "secretsmanager:RestoreSecret",
+      "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue",
+      "secretsmanager:UpdateSecret", "secretsmanager:ListSecrets",
+      "secretsmanager:ListSecretVersionIds",
+      "secretsmanager:TagResource", "secretsmanager:UntagResource",
+      "secretsmanager:GetResourcePolicy", "secretsmanager:PutResourcePolicy",
+      "secretsmanager:DeleteResourcePolicy",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowSSMAccess"
+    effect = "Allow"
+
+    actions = [
+      "ssm:GetParameter", "ssm:GetParameters",
+      # ML EC2 배포 워크플로우에서 SSM으로 명령 실행
+      "ssm:SendCommand", "ssm:GetCommandInvocation",
+      "ssm:DescribeInstanceInformation",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCodeDeployManagement"
+    effect = "Allow"
+
+    actions = [
+      "codedeploy:CreateApplication", "codedeploy:GetApplication",
+      "codedeploy:DeleteApplication", "codedeploy:ListApplications",
+      "codedeploy:CreateDeploymentGroup", "codedeploy:GetDeploymentGroup",
+      "codedeploy:DeleteDeploymentGroup", "codedeploy:UpdateDeploymentGroup",
+      "codedeploy:ListDeploymentGroups", "codedeploy:BatchGetDeploymentGroups",
+      "codedeploy:CreateDeployment", "codedeploy:GetDeployment",
+      "codedeploy:StopDeployment", "codedeploy:ListDeployments",
+      "codedeploy:GetDeploymentConfig",
+      "codedeploy:ListTagsForResource", "codedeploy:TagResource",
+      "codedeploy:UntagResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowSNSManagement"
+    effect = "Allow"
+
+    actions = [
+      "sns:CreateTopic", "sns:GetTopicAttributes", "sns:DeleteTopic",
+      "sns:SetTopicAttributes", "sns:ListTopics",
+      "sns:Subscribe", "sns:GetSubscriptionAttributes",
+      "sns:Unsubscribe", "sns:ListSubscriptionsByTopic",
+      "sns:TagResource", "sns:UntagResource", "sns:ListTagsForResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowFirehoseManagement"
+    effect = "Allow"
+
+    actions = [
+      "firehose:CreateDeliveryStream", "firehose:DescribeDeliveryStream",
+      "firehose:DeleteDeliveryStream", "firehose:UpdateDestination",
+      "firehose:TagDeliveryStream", "firehose:UntagDeliveryStream",
+      "firehose:ListTagsForDeliveryStream",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowLambdaManagement"
+    effect = "Allow"
+
+    actions = [
+      "lambda:CreateFunction", "lambda:GetFunction", "lambda:DeleteFunction",
+      "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
+      "lambda:GetFunctionConfiguration",
+      "lambda:AddPermission", "lambda:GetPolicy", "lambda:RemovePermission",
+      "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource",
+      "lambda:InvokeFunction",
+      "lambda:PublishVersion", "lambda:ListVersionsByFunction",
+      "lambda:PutFunctionEventInvokeConfig", "lambda:GetFunctionEventInvokeConfig",
+      "lambda:DeleteFunctionEventInvokeConfig",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowSchedulerManagement"
+    effect = "Allow"
+
+    actions = [
+      "scheduler:CreateSchedule", "scheduler:GetSchedule",
+      "scheduler:DeleteSchedule", "scheduler:UpdateSchedule",
+      "scheduler:ListSchedules",
+      "scheduler:TagResource", "scheduler:UntagResource",
+      "scheduler:ListTagsForResource",
     ]
 
     resources = ["*"]
