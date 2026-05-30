@@ -195,14 +195,9 @@ export default function HomePage() {
         setUser(loggedInUser);
 
         if (loggedInUser) {
-          const today = todayDateStr();
-          const [sessionsRes, meRankRes] = await Promise.all([
-            fetch('/api/tracking/sessions?limit=10').then(r => r.ok ? r.json() : null),
-            fetch(`/api/ranking/me?date=${today}`).then(r => r.ok ? r.json() : null),
-          ]);
+          const sessionsRes = await fetch('/api/tracking/sessions?limit=10').then(r => r.ok ? r.json() : null);
           if (cancelled) return;
           if (sessionsRes) setData(sessionsRes as StatsResp);
-          if (meRankRes) setMyRank((meRankRes as { rank?: typeof myRank }).rank ?? null);
         }
       } catch (e) {
         console.error('home fetch failed:', e);
@@ -217,16 +212,21 @@ export default function HomePage() {
     (async () => {
       try {
         const today = todayDateStr();
-        const res = await fetch(`/api/ranking?date=${today}&range=${activeRange}&limit=20`);
-        const json = res.ok ? await res.json() : null;
+        const [leaderboardRes, meRankRes] = await Promise.all([
+          fetch(`/api/ranking?date=${today}&range=${activeRange}&limit=20`).then(r => r.ok ? r.json() : null),
+          user
+            ? fetch(`/api/ranking/me?date=${today}&range=${activeRange}`).then(r => r.ok ? r.json() : null)
+            : Promise.resolve(null),
+        ]);
         if (cancelled) return;
-        setLeaderboard((json?.entries as LeaderboardEntry[]) ?? []);
+        setLeaderboard((leaderboardRes?.entries as LeaderboardEntry[]) ?? []);
+        setMyRank(user && meRankRes ? (meRankRes as { rank?: typeof myRank }).rank ?? null : null);
       } catch (e) {
         console.error('leaderboard fetch failed:', e);
       }
     })();
     return () => { cancelled = true; };
-  }, [activeRange]);
+  }, [activeRange, user]);
 
   const requireAuth = (next: string) => {
     if (!user) {

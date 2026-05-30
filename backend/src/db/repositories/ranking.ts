@@ -344,7 +344,11 @@ export async function getRangeLeaderboard(input: {
       sum(best_per_day.high_focus_seconds)::int    AS "highFocusSeconds",
       sum(best_per_day.valid_seconds)::int         AS "validSeconds",
       avg(best_per_day.focus_ratio)::float         AS "focusRatio",
-      max(best_per_day.session_id)  AS "bestSessionId",
+      (array_agg(
+        best_per_day.session_id::text
+        ORDER BY best_per_day.ranking_score DESC NULLS LAST,
+                 best_per_day.high_focus_seconds DESC NULLS LAST
+      ))[1] AS "bestSessionId",
       max(best_per_day.ranking_date) AS "rankingDate",
       u.name                        AS "displayName",
       u.avatar_url                  AS "avatarUrl"
@@ -385,4 +389,69 @@ export async function getRangeLeaderboard(input: {
     focusRatio: Number(r.focusRatio ?? 0),
     rankingDate: String(r.rankingDate ?? input.endDate),
   }));
+}
+
+export async function getUserRangeRank(input: {
+  userId: string;
+  startDate: string;
+  endDate: string;
+}): Promise<UserDailyRank | null> {
+  const rows = await db.execute(sql`
+    WITH best_per_day AS (
+      SELECT DISTINCT ON (user_id, ranking_date)
+        user_id,
+        id AS session_id,
+        ranking_score,
+        coalesce(high_focus_seconds, 0) AS high_focus_seconds,
+        coalesce(valid_seconds, 0) AS valid_seconds,
+        ranking_date
+      FROM tracking_sessions
+      WHERE ranking_eligible = true
+        AND ranking_date BETWEEN ${input.startDate} AND ${input.endDate}
+      ORDER BY user_id, ranking_date, ranking_score DESC NULLS LAST, high_focus_seconds DESC NULLS LAST
+    ),
+    per_user AS (
+      SELECT
+        user_id,
+        (array_agg(
+          session_id::text
+          ORDER BY ranking_score DESC NULLS LAST,
+                   high_focus_seconds DESC NULLS LAST
+        ))[1] AS best_session_id,
+        sum(ranking_score)::float AS ranking_score,
+        sum(high_focus_seconds)::int AS high_focus_seconds,
+        sum(valid_seconds)::int AS valid_seconds
+      FROM best_per_day
+      GROUP BY user_id
+    ),
+    ranked AS (
+      SELECT
+        user_id,
+        best_session_id,
+        ranking_score,
+        high_focus_seconds,
+        valid_seconds,
+        rank() OVER (ORDER BY ranking_score DESC NULLS LAST, high_focus_seconds DESC NULLS LAST)::int AS rank,
+        count(*) OVER ()::int AS total
+      FROM per_user
+    )
+    SELECT *
+    FROM ranked
+    WHERE user_id = ${input.userId}
+  `);
+
+  const rawRows: Record<string, unknown>[] = Array.isArray(rows)
+    ? (rows as Record<string, unknown>[])
+    : ((rows as { rows?: Record<string, unknown>[] }).rows ?? []);
+  const row = rawRows[0];
+  if (!row) return null;
+
+  return {
+    rank: Number(row.rank),
+    total: Number(row.total),
+    bestSessionId: String(row.best_session_id ?? ''),
+    rankingScore: Number(row.ranking_score ?? 0),
+    highFocusSeconds: Number(row.high_focus_seconds ?? 0),
+    validSeconds: Number(row.valid_seconds ?? 0),
+  };
 }

@@ -6,6 +6,7 @@
  * 용도의 high-level helper 만 제공한다. 새 의존성을 도입하지 않는다.
  */
 import { sendRedisCommand } from '@/lib/redisStream';
+import { getRankingRangeDates, type RankingRange } from '@/lib/ranking';
 
 const PRESENCE_TTL_SECONDS = 120;
 const METRICS_TTL_SECONDS = 30;
@@ -299,7 +300,18 @@ export async function setUserRankCache<T = unknown>(
  */
 export async function invalidateLeaderboardCache(date: string): Promise<void> {
   const commonLimits = [10, 20, 50, 100];
-  for (const l of commonLimits) {
-    await sendRedisCommand(['DEL', leaderboardKey(date, l)]);
+  const cacheKeys = new Set<string>([date]);
+  const ranges: RankingRange[] = ['day', 'week', 'month'];
+
+  for (const range of ranges) {
+    const { start, end } = getRankingRangeDates(date, range);
+    cacheKeys.add(`${range}:${date}`);
+    cacheKeys.add(range === 'day' ? `day:${start}` : `${range}:${start}:${end}`);
+  }
+
+  for (const cacheKey of cacheKeys) {
+    for (const l of commonLimits) {
+      await sendRedisCommand(['DEL', leaderboardKey(cacheKey, l)]);
+    }
   }
 }
