@@ -54,3 +54,13 @@ output "postgres_master_user_secret_arn" {
   value       = try(aws_db_instance.postgres.master_user_secret[0].secret_arn, null)
   sensitive   = true
 }
+
+output "grafana_workspace_endpoint" {
+  description = "Amazon Managed Grafana 워크스페이스 접속 URL"
+  value       = "https://${aws_grafana_workspace.main.endpoint}"
+}
+
+output "grafana_workspace_id" {
+  description = "Amazon Managed Grafana 워크스페이스 ID"
+  value       = aws_grafana_workspace.main.id
+}

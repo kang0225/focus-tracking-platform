@@ -35,32 +35,18 @@ data "aws_iam_policy_document" "codedeploy_assume_role" {
   }
 }
 
-################################
-### 앱 서버 역할 (Web EC2 Role) ###
-################################
-
-resource "aws_iam_role" "web_ec2_role" {
-  name               = "${var.project_name}-${var.environment}-web-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+# Grafana 서비스가 이 역할을 빌려 CloudWatch를 조회할 수 있게 허용
+data "aws_iam_policy_document" "grafana_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["grafana.amazonaws.com"]
+    }
+  }
 }
 
-# SSM 접속 권한: 프라이빗 서브넷의 EC2에 SSH 없이 접속하기 위해 필수입니다.
-resource "aws_iam_role_policy_attachment" "web_ec2_ssm" {
-  role       = aws_iam_role.web_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-# ECS 에이전트 권한: EC2가 ECS 클러스터에 자신을 등록하기 위해 필요합니다.
-resource "aws_iam_role_policy_attachment" "web_ec2_container" {
-  role       = aws_iam_role.web_ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
-# EC2 인스턴스에 입히기 위한 프로파일
-resource "aws_iam_instance_profile" "web_ec2_profile" {
-  name = aws_iam_role.web_ec2_role.name
-  role = aws_iam_role.web_ec2_role.name
-}
+# Fargate로 전환하여 웹 EC2 Role은 제거됨.
 
 ################################
 ### ML 서버 역할 (ML EC2 Role) ###
@@ -183,4 +169,69 @@ resource "aws_iam_role_policy" "ml_ec2_bedrock" {
       }
     ]
   })
+}
+
+##########################################
+### Grafana 서비스 역할 (Amazon Managed Grafana) ###
+##########################################
+
+# Amazon Managed Grafana 워크스페이스(27_grafana.tf)가 사용하는 서비스 역할
+resource "aws_iam_role" "grafana" {
+  name               = "${var.project_name}-${var.environment}-grafana-role"
+  assume_role_policy = data.aws_iam_policy_document.grafana_assume_role.json
+}
+
+# CloudWatch 데이터 소스용 읽기 권한 (지표 + 로그 + 태그)
+data "aws_iam_policy_document" "grafana_cloudwatch" {
+  statement {
+    sid    = "AllowReadingMetricsFromCloudWatch"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:DescribeAlarmsForMetric",
+      "cloudwatch:DescribeAlarmHistory",
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:ListMetrics",
+      "cloudwatch:GetMetricData",
+      "cloudwatch:GetInsightRuleReport",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowReadingLogsFromCloudWatch"
+    effect = "Allow"
+    actions = [
+      "logs:DescribeLogGroups",
+      "logs:GetLogGroupFields",
+      "logs:StartQuery",
+      "logs:StopQuery",
+      "logs:GetQueryResults",
+      "logs:GetLogEvents",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowReadingTagsInstancesRegionsFromEC2"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeTags",
+      "ec2:DescribeInstances",
+      "ec2:DescribeRegions",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "AllowReadingResourcesForTags"
+    effect    = "Allow"
+    actions   = ["tag:GetResources"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "grafana_cloudwatch" {
+  name   = "${var.project_name}-${var.environment}-grafana-cloudwatch"
+  role   = aws_iam_role.grafana.id
+  policy = data.aws_iam_policy_document.grafana_cloudwatch.json
 }

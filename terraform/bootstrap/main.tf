@@ -370,6 +370,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
         "lambda.amazonaws.com",
         "logs.amazonaws.com",
         "scheduler.amazonaws.com",
+        "grafana.amazonaws.com",
       ]
     }
   }
@@ -500,6 +501,22 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
       "scheduler:ListSchedules",
       "scheduler:TagResource", "scheduler:UntagResource",
       "scheduler:ListTagsForResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowGrafanaManagement"
+    effect = "Allow"
+
+    actions = [
+      "grafana:CreateWorkspace", "grafana:DescribeWorkspace",
+      "grafana:DeleteWorkspace", "grafana:UpdateWorkspace",
+      "grafana:ListWorkspaces",
+      "grafana:DescribeWorkspaceAuthentication", "grafana:UpdateWorkspaceAuthentication",
+      "grafana:DescribeWorkspaceConfiguration", "grafana:UpdateWorkspaceConfiguration",
+      "grafana:ListTagsForResource", "grafana:TagResource", "grafana:UntagResource",
     ]
 
     resources = ["*"]
