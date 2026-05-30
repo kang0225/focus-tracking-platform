@@ -165,12 +165,14 @@ resource "aws_ecs_service" "app" {
   }
 
   # CodeDeploy가 배포 중에 task_definition, load_balancer를 바꿈
+  # platform_version도 CODE_DEPLOY 서비스에서는 CodeDeploy 배포로 갱신
   # Auto Scaling이 desired_count를 바꿈
   # Terraform이 되돌리지 않도록 모두 무시
   lifecycle {
     ignore_changes = [
       task_definition,
       load_balancer,
+      platform_version,
       desired_count,
     ]
   }
@@ -184,4 +186,3 @@ resource "aws_ecs_service" "app" {
     Name = "${var.project_name}-${var.environment}-svc"
   }
 }
-
