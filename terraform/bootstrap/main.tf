@@ -140,35 +140,32 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
     effect = "Allow"
 
     actions = [
-      "ec2:CreateVpc", "ec2:DescribeVpcs", "ec2:DeleteVpc",
-      "ec2:ModifyVpcAttribute", "ec2:DescribeVpcAttribute",
-      "ec2:CreateSubnet", "ec2:DescribeSubnets", "ec2:DeleteSubnet", "ec2:ModifySubnetAttribute",
-      "ec2:CreateInternetGateway", "ec2:DescribeInternetGateways", "ec2:DeleteInternetGateway",
+      # 읽기 전용 액션은 와일드카드로 통합한다. Terraform refresh가 리소스마다
+      # DescribeVolumes/DescribeInstanceCreditSpecifications/DescribeAddressesAttribute
+      # 등 다양한 Describe* 를 호출하는데, 개별 나열 시 누락 하나마다 refresh 403 →
+      # plan 중단이 반복되므로 ec2:Describe* 로 묶는다.
+      "ec2:Describe*",
+      # 쓰기/생성/삭제 액션은 최소권한 유지를 위해 명시적으로 나열한다.
+      "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:ModifyVpcAttribute",
+      "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:ModifySubnetAttribute",
+      "ec2:CreateInternetGateway", "ec2:DeleteInternetGateway",
       "ec2:AttachInternetGateway", "ec2:DetachInternetGateway",
-      "ec2:CreateRouteTable", "ec2:DescribeRouteTables", "ec2:DeleteRouteTable",
+      "ec2:CreateRouteTable", "ec2:DeleteRouteTable",
       "ec2:CreateRoute", "ec2:DeleteRoute", "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable",
-      "ec2:AllocateAddress", "ec2:DescribeAddresses", "ec2:DescribeAddressesAttribute", "ec2:ReleaseAddress",
+      "ec2:AllocateAddress", "ec2:ReleaseAddress",
       "ec2:AssociateAddress", "ec2:DisassociateAddress",
-      "ec2:CreateNatGateway", "ec2:DescribeNatGateways", "ec2:DeleteNatGateway",
-      "ec2:CreateSecurityGroup", "ec2:DescribeSecurityGroups", "ec2:DeleteSecurityGroup",
+      "ec2:CreateNatGateway", "ec2:DeleteNatGateway",
+      "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
       "ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress",
       "ec2:RevokeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
-      "ec2:DescribeSecurityGroupRules",
-      "ec2:CreateNetworkAcl", "ec2:DescribeNetworkAcls", "ec2:DeleteNetworkAcl",
+      "ec2:CreateNetworkAcl", "ec2:DeleteNetworkAcl",
       "ec2:CreateNetworkAclEntry", "ec2:DeleteNetworkAclEntry",
       "ec2:ReplaceNetworkAclEntry", "ec2:ReplaceNetworkAclAssociation",
-      "ec2:CreateVpcEndpoint", "ec2:DescribeVpcEndpoints", "ec2:DeleteVpcEndpoints",
-      "ec2:ModifyVpcEndpoint", "ec2:DescribePrefixLists",
-      "ec2:RunInstances", "ec2:DescribeInstances", "ec2:TerminateInstances",
-      "ec2:ModifyInstanceAttribute", "ec2:DescribeInstanceAttribute", "ec2:DescribeInstanceStatus",
-      "ec2:DescribeVolumes",
-      "ec2:CreateLaunchTemplate", "ec2:DescribeLaunchTemplates", "ec2:DeleteLaunchTemplate",
-      "ec2:CreateLaunchTemplateVersion", "ec2:DescribeLaunchTemplateVersions",
-      "ec2:CreateFlowLogs", "ec2:DescribeFlowLogs", "ec2:DeleteFlowLogs",
-      "ec2:CreateTags", "ec2:DeleteTags", "ec2:DescribeTags",
-      "ec2:DescribeAvailabilityZones", "ec2:DescribeImages",
-      "ec2:DescribeInstanceTypes", "ec2:DescribeAccountAttributes",
-      "ec2:DescribeNetworkInterfaces",
+      "ec2:CreateVpcEndpoint", "ec2:DeleteVpcEndpoints", "ec2:ModifyVpcEndpoint",
+      "ec2:RunInstances", "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute",
+      "ec2:CreateLaunchTemplate", "ec2:DeleteLaunchTemplate", "ec2:CreateLaunchTemplateVersion",
+      "ec2:CreateFlowLogs", "ec2:DeleteFlowLogs",
+      "ec2:CreateTags", "ec2:DeleteTags",
     ]
 
     resources = ["*"]
@@ -179,22 +176,23 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
     effect = "Allow"
 
     actions = [
-      "elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:DescribeLoadBalancers",
-      "elasticloadbalancing:DeleteLoadBalancer", "elasticloadbalancing:ModifyLoadBalancerAttributes",
-      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      # 읽기 전용 액션은 와일드카드로 통합한다. refresh가 DescribeListenerAttributes/
+      # DescribeLoadBalancerAttributes/DescribeTargetGroupAttributes 등을 호출하므로
+      # 개별 나열 대신 elasticloadbalancing:Describe* 로 묶어 누락에 의한 403을 막는다.
+      "elasticloadbalancing:Describe*",
+      # 쓰기/생성/삭제 액션은 최소권한 유지를 위해 명시적으로 나열한다.
+      "elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:DeleteLoadBalancer",
+      "elasticloadbalancing:ModifyLoadBalancerAttributes",
       "elasticloadbalancing:SetSecurityGroups", "elasticloadbalancing:SetSubnets",
       "elasticloadbalancing:SetIpAddressType",
-      "elasticloadbalancing:CreateListener", "elasticloadbalancing:DescribeListeners",
-      "elasticloadbalancing:DeleteListener", "elasticloadbalancing:ModifyListener",
-      "elasticloadbalancing:CreateTargetGroup", "elasticloadbalancing:DescribeTargetGroups",
-      "elasticloadbalancing:DeleteTargetGroup", "elasticloadbalancing:ModifyTargetGroup",
-      "elasticloadbalancing:ModifyTargetGroupAttributes", "elasticloadbalancing:DescribeTargetGroupAttributes",
+      "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListener",
+      "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:CreateTargetGroup", "elasticloadbalancing:DeleteTargetGroup",
+      "elasticloadbalancing:ModifyTargetGroup", "elasticloadbalancing:ModifyTargetGroupAttributes",
       "elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets",
-      "elasticloadbalancing:DescribeTargetHealth",
-      "elasticloadbalancing:CreateRule", "elasticloadbalancing:DescribeRules",
-      "elasticloadbalancing:DeleteRule", "elasticloadbalancing:ModifyRule",
+      "elasticloadbalancing:CreateRule", "elasticloadbalancing:DeleteRule",
+      "elasticloadbalancing:ModifyRule",
       "elasticloadbalancing:AddTags", "elasticloadbalancing:RemoveTags",
-      "elasticloadbalancing:DescribeTags",
     ]
 
     resources = ["*"]
@@ -209,26 +207,19 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "autoscaling:CreateAutoScalingGroup", "autoscaling:DescribeAutoScalingGroups",
-      "autoscaling:DeleteAutoScalingGroup", "autoscaling:UpdateAutoScalingGroup",
-      "autoscaling:DescribeScalingActivities",
-      "autoscaling:CreateOrUpdateTags", "autoscaling:DeleteTags", "autoscaling:DescribeTags",
-      "autoscaling:DescribeLifecycleHooks", "autoscaling:PutLifecycleHook",
-      "autoscaling:DeleteLifecycleHook",
-      "autoscaling:DescribeAutoScalingInstances", "autoscaling:DescribeLoadBalancerTargetGroups",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "autoscaling:Describe*",
+      "autoscaling:CreateAutoScalingGroup", "autoscaling:DeleteAutoScalingGroup",
+      "autoscaling:UpdateAutoScalingGroup",
+      "autoscaling:CreateOrUpdateTags", "autoscaling:DeleteTags",
+      "autoscaling:PutLifecycleHook", "autoscaling:DeleteLifecycleHook",
       "autoscaling:AttachLoadBalancerTargetGroups", "autoscaling:DetachLoadBalancerTargetGroups",
-      "autoscaling:DescribeTerminationPolicyTypes", "autoscaling:DescribeAdjustmentTypes",
-      "autoscaling:DescribeMetricCollectionTypes",
       "autoscaling:EnableMetricsCollection", "autoscaling:DisableMetricsCollection",
-      "autoscaling:DescribeNotificationConfigurations",
       "autoscaling:SuspendProcesses", "autoscaling:ResumeProcesses",
-      "application-autoscaling:RegisterScalableTarget", "application-autoscaling:DescribeScalableTargets",
-      "application-autoscaling:DeregisterScalableTarget",
-      "application-autoscaling:PutScalingPolicy", "application-autoscaling:DescribeScalingPolicies",
-      "application-autoscaling:DeleteScalingPolicy",
-      "application-autoscaling:DescribeScalingActivities",
+      "application-autoscaling:Describe*", "application-autoscaling:ListTagsForResource",
+      "application-autoscaling:RegisterScalableTarget", "application-autoscaling:DeregisterScalableTarget",
+      "application-autoscaling:PutScalingPolicy", "application-autoscaling:DeleteScalingPolicy",
       "application-autoscaling:TagResource", "application-autoscaling:UntagResource",
-      "application-autoscaling:ListTagsForResource",
     ]
 
     resources = ["*"]
@@ -239,16 +230,14 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "ecs:CreateCluster", "ecs:DescribeClusters", "ecs:DeleteCluster", "ecs:UpdateCluster",
-      "ecs:ListClusters",
-      "ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition",
-      "ecs:DeregisterTaskDefinition", "ecs:ListTaskDefinitions",
-      "ecs:CreateService", "ecs:DescribeServices", "ecs:DeleteService", "ecs:UpdateService",
-      "ecs:CreateCapacityProvider", "ecs:DescribeCapacityProviders",
-      "ecs:DeleteCapacityProvider", "ecs:UpdateCapacityProvider",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "ecs:Describe*", "ecs:List*",
+      "ecs:CreateCluster", "ecs:DeleteCluster", "ecs:UpdateCluster",
+      "ecs:RegisterTaskDefinition", "ecs:DeregisterTaskDefinition",
+      "ecs:CreateService", "ecs:DeleteService", "ecs:UpdateService",
+      "ecs:CreateCapacityProvider", "ecs:DeleteCapacityProvider", "ecs:UpdateCapacityProvider",
       "ecs:PutClusterCapacityProviders",
-      "ecs:TagResource", "ecs:UntagResource", "ecs:ListTagsForResource",
-      "ecs:DescribeTasks", "ecs:ListTasks",
+      "ecs:TagResource", "ecs:UntagResource",
     ]
 
     resources = ["*"]
@@ -259,17 +248,17 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "ecr:CreateRepository", "ecr:DescribeRepositories", "ecr:DeleteRepository",
-      "ecr:GetRepositoryPolicy", "ecr:SetRepositoryPolicy", "ecr:DeleteRepositoryPolicy",
-      "ecr:PutLifecyclePolicy", "ecr:GetLifecyclePolicy", "ecr:DeleteLifecyclePolicy",
+      # 읽기 전용(Describe*/Get*/List*/BatchGet*/BatchCheck*)은 와일드카드로 통합 (refresh 403 루프 방지)
+      "ecr:Describe*", "ecr:Get*", "ecr:List*",
+      "ecr:BatchGetImage", "ecr:BatchCheckLayerAvailability",
+      "ecr:CreateRepository", "ecr:DeleteRepository",
+      "ecr:SetRepositoryPolicy", "ecr:DeleteRepositoryPolicy",
+      "ecr:PutLifecyclePolicy", "ecr:DeleteLifecyclePolicy",
       "ecr:PutImageTagMutability", "ecr:PutImageScanningConfiguration",
-      "ecr:ListTagsForResource", "ecr:TagResource", "ecr:UntagResource",
-      "ecr:DescribeImages",
+      "ecr:TagResource", "ecr:UntagResource",
       # Docker push (GitHub Actions CI/CD)
-      "ecr:GetAuthorizationToken",
-      "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload",
-      "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
-      "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload", "ecr:PutImage",
     ]
 
     resources = ["*"]
@@ -280,16 +269,18 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "logs:CreateLogGroup", "logs:DescribeLogGroups", "logs:DeleteLogGroup",
-      "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:DeleteLogStream",
-      "logs:PutSubscriptionFilter", "logs:DescribeSubscriptionFilters",
-      "logs:DeleteSubscriptionFilter",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "logs:Describe*", "logs:ListTagsLogGroup", "logs:ListTagsForResource",
+      "logs:CreateLogGroup", "logs:DeleteLogGroup",
+      "logs:CreateLogStream", "logs:DeleteLogStream",
+      "logs:PutSubscriptionFilter", "logs:DeleteSubscriptionFilter",
       "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy",
-      "logs:ListTagsLogGroup", "logs:TagLogGroup", "logs:UntagLogGroup",
-      "logs:ListTagsForResource", "logs:TagResource", "logs:UntagResource",
-      "logs:DescribeResourcePolicies", "logs:PutResourcePolicy",
-      "cloudwatch:PutMetricAlarm", "cloudwatch:DescribeAlarms", "cloudwatch:DeleteAlarms",
-      "cloudwatch:ListTagsForResource", "cloudwatch:TagResource", "cloudwatch:UntagResource",
+      "logs:TagLogGroup", "logs:UntagLogGroup",
+      "logs:TagResource", "logs:UntagResource",
+      "logs:PutResourcePolicy",
+      "cloudwatch:Describe*", "cloudwatch:ListTagsForResource",
+      "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms",
+      "cloudwatch:TagResource", "cloudwatch:UntagResource",
     ]
 
     resources = ["*"]
@@ -300,13 +291,12 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "route53:ListHostedZones", "route53:ListHostedZonesByName",
-      "route53:GetHostedZone", "route53:ChangeResourceRecordSets",
-      "route53:ListResourceRecordSets", "route53:GetChange",
-      "route53:ListTagsForResource", "route53:ChangeTagsForResource",
-      "acm:RequestCertificate", "acm:DescribeCertificate", "acm:DeleteCertificate",
-      "acm:AddTagsToCertificate", "acm:ListTagsForCertificate",
-      "acm:RemoveTagsFromCertificate", "acm:ListCertificates",
+      # 읽기 전용(Get*/List*/Describe*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "route53:Get*", "route53:List*",
+      "route53:ChangeResourceRecordSets", "route53:ChangeTagsForResource",
+      "acm:Describe*", "acm:List*",
+      "acm:RequestCertificate", "acm:DeleteCertificate",
+      "acm:AddTagsToCertificate", "acm:RemoveTagsFromCertificate",
     ]
 
     resources = ["*"]
@@ -317,19 +307,21 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
     effect = "Allow"
 
     actions = [
-      "s3:CreateBucket", "s3:HeadBucket", "s3:DeleteBucket", "s3:GetBucketLocation",
-      "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy",
-      "s3:GetBucketVersioning", "s3:PutBucketVersioning",
-      "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration",
-      "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
-      "s3:GetBucketLifecycleConfiguration", "s3:PutBucketLifecycleConfiguration",
-      "s3:DeleteBucketLifecycle",
-      "s3:GetBucketLogging", "s3:PutBucketLogging",
-      "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketWebsite",
-      "s3:GetAccelerateConfiguration",
-      "s3:GetBucketTagging", "s3:PutBucketTagging",
-      "s3:GetBucketOwnershipControls",
-      "s3:ListBucket", "s3:GetObject", "s3:PutObject",
+      # 읽기 전용 액션은 와일드카드로 통합한다. Terraform이 버킷을 refresh할 때
+      # GetBucketAcl/Cors/Website/Accelerate/RequestPayment/Replication/Notification
+      # /ObjectLockConfiguration 등 다수의 Get* 를 호출하는데, 개별 나열 시
+      # 누락 하나마다 refresh 403 → plan 중단이 반복되므로 s3:Get*/s3:List* 로 묶는다.
+      "s3:Get*", "s3:List*",
+      # 쓰기/생성/삭제 액션은 최소권한 유지를 위해 명시적으로 나열한다.
+      "s3:CreateBucket", "s3:HeadBucket", "s3:DeleteBucket",
+      "s3:PutBucketPolicy", "s3:DeleteBucketPolicy",
+      "s3:PutBucketVersioning",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketLifecycleConfiguration", "s3:DeleteBucketLifecycle",
+      "s3:PutBucketLogging",
+      "s3:PutBucketTagging",
+      "s3:PutObject",
     ]
 
     resources = ["*"]
@@ -343,17 +335,17 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "iam:CreateRole", "iam:GetRole", "iam:DeleteRole", "iam:UpdateAssumeRolePolicy",
-      "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:ListAttachedRolePolicies",
-      "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy", "iam:ListRolePolicies",
-      "iam:CreatePolicy", "iam:GetPolicy", "iam:DeletePolicy",
-      "iam:CreatePolicyVersion", "iam:GetPolicyVersion",
-      "iam:DeletePolicyVersion", "iam:ListPolicyVersions",
-      "iam:CreateInstanceProfile", "iam:GetInstanceProfile", "iam:DeleteInstanceProfile",
+      # 읽기 전용(Get*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "iam:Get*", "iam:List*",
+      "iam:CreateRole", "iam:DeleteRole", "iam:UpdateAssumeRolePolicy",
+      "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+      "iam:PutRolePolicy", "iam:DeleteRolePolicy",
+      "iam:CreatePolicy", "iam:DeletePolicy",
+      "iam:CreatePolicyVersion", "iam:DeletePolicyVersion",
+      "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile",
       "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
-      "iam:ListInstanceProfilesForRole",
-      "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags",
-      "iam:TagPolicy", "iam:UntagPolicy", "iam:ListPolicyTags",
+      "iam:TagRole", "iam:UntagRole",
+      "iam:TagPolicy", "iam:UntagPolicy",
       "iam:CreateServiceLinkedRole",
     ]
 
@@ -380,6 +372,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
         "logs.amazonaws.com",
         "scheduler.amazonaws.com",
         "grafana.amazonaws.com",
+        "vpc-flow-logs.amazonaws.com", # aws_flow_log.main 의 deliver_logs_role_arn 전달용
       ]
     }
   }
@@ -389,12 +382,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "rds:CreateDBInstance", "rds:DescribeDBInstances",
-      "rds:DeleteDBInstance", "rds:ModifyDBInstance",
-      "rds:CreateDBSubnetGroup", "rds:DescribeDBSubnetGroups",
-      "rds:DeleteDBSubnetGroup", "rds:ModifyDBSubnetGroup",
-      "rds:AddTagsToResource", "rds:RemoveTagsFromResource", "rds:ListTagsForResource",
-      "rds:DescribeDBEngineVersions", "rds:DescribeOrderableDBInstanceOptions",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "rds:Describe*", "rds:ListTagsForResource",
+      "rds:CreateDBInstance", "rds:DeleteDBInstance", "rds:ModifyDBInstance",
+      "rds:CreateDBSubnetGroup", "rds:DeleteDBSubnetGroup", "rds:ModifyDBSubnetGroup",
+      "rds:AddTagsToResource", "rds:RemoveTagsFromResource",
     ]
 
     resources = ["*"]
@@ -405,14 +397,12 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret",
-      "secretsmanager:DeleteSecret", "secretsmanager:RestoreSecret",
-      "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue",
-      "secretsmanager:UpdateSecret", "secretsmanager:ListSecrets",
-      "secretsmanager:ListSecretVersionIds",
+      # 읽기 전용(Describe*/Get*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "secretsmanager:Describe*", "secretsmanager:Get*", "secretsmanager:List*",
+      "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret", "secretsmanager:RestoreSecret",
+      "secretsmanager:PutSecretValue", "secretsmanager:UpdateSecret",
       "secretsmanager:TagResource", "secretsmanager:UntagResource",
-      "secretsmanager:GetResourcePolicy", "secretsmanager:PutResourcePolicy",
-      "secretsmanager:DeleteResourcePolicy",
+      "secretsmanager:PutResourcePolicy", "secretsmanager:DeleteResourcePolicy",
     ]
 
     resources = ["*"]
@@ -423,10 +413,10 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "ssm:GetParameter", "ssm:GetParameters",
+      # 읽기 전용(Get*/Describe*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "ssm:Get*", "ssm:Describe*",
       # ML EC2 배포 워크플로우에서 SSM으로 명령 실행
-      "ssm:SendCommand", "ssm:GetCommandInvocation",
-      "ssm:DescribeInstanceInformation",
+      "ssm:SendCommand",
     ]
 
     resources = ["*"]
@@ -437,16 +427,13 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "codedeploy:CreateApplication", "codedeploy:GetApplication",
-      "codedeploy:DeleteApplication", "codedeploy:ListApplications",
-      "codedeploy:CreateDeploymentGroup", "codedeploy:GetDeploymentGroup",
-      "codedeploy:DeleteDeploymentGroup", "codedeploy:UpdateDeploymentGroup",
-      "codedeploy:ListDeploymentGroups", "codedeploy:BatchGetDeploymentGroups",
-      "codedeploy:CreateDeployment", "codedeploy:GetDeployment",
-      "codedeploy:StopDeployment", "codedeploy:ListDeployments",
-      "codedeploy:GetDeploymentConfig",
-      "codedeploy:ListTagsForResource", "codedeploy:TagResource",
-      "codedeploy:UntagResource",
+      # 읽기 전용(Get*/List*/BatchGet*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "codedeploy:Get*", "codedeploy:List*", "codedeploy:BatchGet*",
+      "codedeploy:CreateApplication", "codedeploy:DeleteApplication",
+      "codedeploy:CreateDeploymentGroup", "codedeploy:DeleteDeploymentGroup",
+      "codedeploy:UpdateDeploymentGroup",
+      "codedeploy:CreateDeployment", "codedeploy:StopDeployment",
+      "codedeploy:TagResource", "codedeploy:UntagResource",
     ]
 
     resources = ["*"]
@@ -457,11 +444,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "sns:CreateTopic", "sns:GetTopicAttributes", "sns:DeleteTopic",
-      "sns:SetTopicAttributes", "sns:ListTopics",
-      "sns:Subscribe", "sns:GetSubscriptionAttributes",
-      "sns:Unsubscribe", "sns:ListSubscriptionsByTopic",
-      "sns:TagResource", "sns:UntagResource", "sns:ListTagsForResource",
+      # 읽기 전용(Get*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "sns:Get*", "sns:List*",
+      "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes",
+      "sns:Subscribe", "sns:Unsubscribe",
+      "sns:TagResource", "sns:UntagResource",
     ]
 
     resources = ["*"]
@@ -472,10 +459,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "firehose:CreateDeliveryStream", "firehose:DescribeDeliveryStream",
-      "firehose:DeleteDeliveryStream", "firehose:UpdateDestination",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "firehose:Describe*", "firehose:ListTagsForDeliveryStream",
+      "firehose:CreateDeliveryStream", "firehose:DeleteDeliveryStream",
+      "firehose:UpdateDestination",
       "firehose:TagDeliveryStream", "firehose:UntagDeliveryStream",
-      "firehose:ListTagsForDeliveryStream",
     ]
 
     resources = ["*"]
@@ -486,15 +474,14 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "lambda:CreateFunction", "lambda:GetFunction", "lambda:DeleteFunction",
+      # 읽기 전용(Get*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "lambda:Get*", "lambda:List*",
+      "lambda:CreateFunction", "lambda:DeleteFunction",
       "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
-      "lambda:GetFunctionConfiguration", "lambda:GetFunctionCodeSigningConfig",
-      "lambda:AddPermission", "lambda:GetPolicy", "lambda:RemovePermission",
-      "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource",
-      "lambda:InvokeFunction",
-      "lambda:PublishVersion", "lambda:ListVersionsByFunction",
-      "lambda:PutFunctionEventInvokeConfig", "lambda:GetFunctionEventInvokeConfig",
-      "lambda:DeleteFunctionEventInvokeConfig",
+      "lambda:AddPermission", "lambda:RemovePermission",
+      "lambda:TagResource", "lambda:UntagResource",
+      "lambda:InvokeFunction", "lambda:PublishVersion",
+      "lambda:PutFunctionEventInvokeConfig", "lambda:DeleteFunctionEventInvokeConfig",
     ]
 
     resources = ["*"]
@@ -505,11 +492,10 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "scheduler:CreateSchedule", "scheduler:GetSchedule",
-      "scheduler:DeleteSchedule", "scheduler:UpdateSchedule",
-      "scheduler:ListSchedules",
+      # 읽기 전용(Get*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "scheduler:Get*", "scheduler:List*",
+      "scheduler:CreateSchedule", "scheduler:DeleteSchedule", "scheduler:UpdateSchedule",
       "scheduler:TagResource", "scheduler:UntagResource",
-      "scheduler:ListTagsForResource",
     ]
 
     resources = ["*"]
@@ -520,12 +506,17 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
     effect = "Allow"
 
     actions = [
-      "grafana:CreateWorkspace", "grafana:DescribeWorkspace",
-      "grafana:DeleteWorkspace", "grafana:UpdateWorkspace",
-      "grafana:ListWorkspaces",
-      "grafana:DescribeWorkspaceAuthentication", "grafana:UpdateWorkspaceAuthentication",
-      "grafana:DescribeWorkspaceConfiguration", "grafana:UpdateWorkspaceConfiguration",
-      "grafana:ListTagsForResource", "grafana:TagResource", "grafana:UntagResource",
+      # 읽기 전용(Describe*/List*)은 와일드카드로 통합, 쓰기는 명시 (refresh 403 루프 방지)
+      "grafana:Describe*", "grafana:List*",
+      "grafana:CreateWorkspace", "grafana:DeleteWorkspace", "grafana:UpdateWorkspace",
+      "grafana:UpdateWorkspaceAuthentication", "grafana:UpdateWorkspaceConfiguration",
+      "grafana:TagResource", "grafana:UntagResource",
+      # AWS_SSO 인증 워크스페이스 생성/삭제 시 AMG가 IAM Identity Center에
+      # managed application instance를 등록하므로 호출자에게 sso 권한이 필요하다.
+      # (AWS 관리형 AWSGrafanaAccountAdministrator 기준)
+      "sso:CreateManagedApplicationInstance", "sso:DeleteManagedApplicationInstance",
+      "sso:GetManagedApplicationInstance", "sso:DescribeRegisteredRegions",
+      "sso:GetSharedSsoConfiguration", "sso:ListDirectoryAssociations",
     ]
 
     resources = ["*"]
