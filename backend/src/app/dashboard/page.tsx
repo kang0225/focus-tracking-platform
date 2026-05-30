@@ -40,6 +40,12 @@ const formatDuration = (seconds: number) => {
   return `${m}분`;
 };
 
+const formatFocusPercent = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(value)) return '--';
+  const percent = value > 1 ? value : value * 100;
+  return `${Math.round(Math.max(0, Math.min(100, percent)))}%`;
+};
+
 const formatDateTime = (ts: number) =>
   new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     .format(new Date(ts));
@@ -184,7 +190,7 @@ export default function DashboardPage() {
           <StatCard label="누적 학습 시간" value={stats ? formatDuration(stats.totalDurationSeconds) : '0분'} icon="ti-clock" />
           <StatCard
             label="평균 집중도"
-            value={stats?.avgFocusRatio != null ? `${Math.round(stats.avgFocusRatio * 100)}%` : '--'}
+            value={formatFocusPercent(stats?.avgFocusRatio)}
             icon="ti-bolt"
           />
           <StatCard
@@ -298,7 +304,7 @@ export default function DashboardPage() {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <MiniStat label="세션 수" value={String(selectedSessions.length)} />
                 <MiniStat label="학습 시간" value={formatDuration(selectedStats.totalDurationSeconds)} accent />
-                <MiniStat label="평균 집중도" value={selectedStats.avgFocusRatio != null ? `${Math.round(selectedStats.avgFocusRatio * 100)}%` : '--'} />
+                <MiniStat label="평균 집중도" value={formatFocusPercent(selectedStats.avgFocusRatio)} />
                 <MiniStat label="평균 BPM" value={selectedStats.avgBpm != null ? String(Math.round(selectedStats.avgBpm)) : '--'} />
               </div>
 
@@ -319,7 +325,7 @@ export default function DashboardPage() {
                           <td className="px-3 py-2.5" style={{ color: 'var(--color-text)' }}>{formatDateTime(s.startedAt)}</td>
                           <td className="px-3 py-2.5" style={{ color: 'var(--color-text-soft)' }}>{formatDuration(s.durationSeconds)}</td>
                           <td className="px-3 py-2.5 font-semibold" style={{ color: 'var(--color-brand-600)' }}>
-                            {s.focusRatio != null ? `${Math.round(s.focusRatio * 100)}%` : '--'}
+                            {formatFocusPercent(s.focusRatio)}
                           </td>
                           <td className="px-3 py-2.5 font-semibold" style={{ color: 'var(--color-danger)' }}>
                             {s.avgBpm != null ? Math.round(s.avgBpm) : '--'}
@@ -367,7 +373,7 @@ export default function DashboardPage() {
                       <td className="px-3 py-2.5" style={{ color: 'var(--color-text)' }}>{formatDateTime(s.startedAt)}</td>
                       <td className="px-3 py-2.5" style={{ color: 'var(--color-text-soft)' }}>{formatDuration(s.durationSeconds)}</td>
                       <td className="px-3 py-2.5 font-semibold" style={{ color: 'var(--color-brand-600)' }}>
-                        {s.focusRatio != null ? `${Math.round(s.focusRatio * 100)}%` : '--'}
+                        {formatFocusPercent(s.focusRatio)}
                       </td>
                       <td className="px-3 py-2.5 font-semibold" style={{ color: 'var(--color-danger)' }}>
                         {s.avgBpm != null ? Math.round(s.avgBpm) : '--'}

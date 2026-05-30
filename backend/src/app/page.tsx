@@ -77,6 +77,16 @@ const formatTime = (seconds: number) => {
   return `${h}h ${String(m).padStart(2, '0')}m`;
 };
 
+const normalizeFocusRatio = (value: number) => {
+  const ratio = value > 1 ? value / 100 : value;
+  return Math.max(0, Math.min(1, ratio));
+};
+
+const formatFocusPercent = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(value)) return '--';
+  return `${Math.round(normalizeFocusRatio(value) * 100)}%`;
+};
+
 const formatRelativeDate = (timestamp: number) => {
   const date = new Date(timestamp);
   const now = new Date();
@@ -106,9 +116,10 @@ const dDay = (target: Date) => {
 };
 
 const autoComment = (entry: LeaderboardEntry): string => {
-  if (entry.focusRatio >= 0.85) return '몰입의 신';
+  const focusRatio = normalizeFocusRatio(entry.focusRatio);
+  if (focusRatio >= 0.85) return '몰입의 신';
   if (entry.validSeconds >= 4 * 3600) return '엉덩이 챔피언';
-  if (entry.focusRatio >= 0.75) return '오늘도 화이팅';
+  if (focusRatio >= 0.75) return '오늘도 화이팅';
   if (entry.validSeconds >= 2 * 3600) return '꾸준한 그대';
   return '시간만 늘리면 탑 5';
 };
@@ -503,7 +514,7 @@ export default function HomePage() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-500)' }}>
-                        {s.focusRatio != null ? `${Math.round(s.focusRatio * 100)}%` : '--'}
+                        {formatFocusPercent(s.focusRatio)}
                       </div>
                       <div className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>집중도</div>
                     </div>
@@ -594,10 +605,10 @@ export default function HomePage() {
                         <div className="text-sm font-semibold" style={{ color: 'var(--color-brand-900)' }}>
                           {activeCategory === 'score' ? `${Math.round(entry.rankingScore)}점` :
                            activeCategory === 'time' ? formatTime(entry.validSeconds) :
-                           `${Math.round(entry.focusRatio * 100)}%`}
+                           formatFocusPercent(entry.focusRatio)}
                         </div>
                         <div className="text-[10px]" style={{ color: 'var(--color-text-soft)' }}>
-                          {Math.round(entry.focusRatio * 100)}% · {formatTime(entry.validSeconds)}
+                          {formatFocusPercent(entry.focusRatio)} · {formatTime(entry.validSeconds)}
                         </div>
                       </div>
                     </div>
