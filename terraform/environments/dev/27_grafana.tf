@@ -28,3 +28,5 @@ resource "aws_grafana_workspace" "main" {
     Name = "${var.project_name}-${var.environment}-grafana"
   }
 }
+
+# 사용자 및 그룹 할당은 콘솔에서 직접 진행.
