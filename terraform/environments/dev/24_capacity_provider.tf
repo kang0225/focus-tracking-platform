@@ -114,7 +114,7 @@ resource "aws_autoscaling_group" "app" {
 
   # 인스턴스 개수 정책
   min_size         = 1 # 절대 0으로 안 내려감 (항상 EC2 1대 유지)
-  max_size         = 2 # ENI 제약 + 비용 상한
+  max_size         = 4 # ENI 제약 + 비용 상한
   desired_capacity = 1 # 평소 목표치 (Capacity Provider가 자동 조정)
 
   # AZ 분산: 두 서브넷 등록 → ASG가 자동으로 분산 배치
