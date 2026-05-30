@@ -344,7 +344,11 @@ export async function getRangeLeaderboard(input: {
       sum(best_per_day.high_focus_seconds)::int    AS "highFocusSeconds",
       sum(best_per_day.valid_seconds)::int         AS "validSeconds",
       avg(best_per_day.focus_ratio)::float         AS "focusRatio",
-      max(best_per_day.session_id)  AS "bestSessionId",
+      (array_agg(
+        best_per_day.session_id::text
+        ORDER BY best_per_day.ranking_score DESC NULLS LAST,
+                 best_per_day.high_focus_seconds DESC NULLS LAST
+      ))[1] AS "bestSessionId",
       max(best_per_day.ranking_date) AS "rankingDate",
       u.name                        AS "displayName",
       u.avatar_url                  AS "avatarUrl"
@@ -409,7 +413,11 @@ export async function getUserRangeRank(input: {
     per_user AS (
       SELECT
         user_id,
-        max(session_id) AS best_session_id,
+        (array_agg(
+          session_id::text
+          ORDER BY ranking_score DESC NULLS LAST,
+                   high_focus_seconds DESC NULLS LAST
+        ))[1] AS best_session_id,
         sum(ranking_score)::float AS ranking_score,
         sum(high_focus_seconds)::int AS high_focus_seconds,
         sum(valid_seconds)::int AS valid_seconds
