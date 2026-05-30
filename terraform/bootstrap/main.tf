@@ -326,6 +326,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
       "s3:DeleteBucketLifecycle",
       "s3:GetBucketLogging", "s3:PutBucketLogging",
       "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketWebsite",
+      "s3:GetAccelerateConfiguration",
       "s3:GetBucketTagging", "s3:PutBucketTagging",
       "s3:GetBucketOwnershipControls",
       "s3:ListBucket", "s3:GetObject", "s3:PutObject",
