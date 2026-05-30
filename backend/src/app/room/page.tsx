@@ -28,6 +28,20 @@ function formatMetric(value: number | null | undefined, digits = 3) {
   return Number.isInteger(value) ? String(value) : value.toFixed(digits);
 }
 
+function formatSessionDuration(milliseconds: number | null | undefined) {
+  if (typeof milliseconds !== 'number' || !Number.isFinite(milliseconds)) return '--';
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}시간 ${String(minutes).padStart(2, '0')}분 ${String(seconds).padStart(2, '0')}초`;
+  }
+
+  return `${minutes}분 ${String(seconds).padStart(2, '0')}초`;
+}
+
 function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled, videoId }: StreamVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -75,9 +89,10 @@ function StreamVideo({ stream, muted = false, label, audioEnabled, videoEnabled,
   );
 }
 
-function ParticipantMetric({ participant, isMe }: { participant: RoomParticipant; isMe: boolean }) {
+function ParticipantMetric({ participant, isMe, now }: { participant: RoomParticipant; isMe: boolean; now: number }) {
   const { metrics } = participant;
-  const isFresh = Date.now() - metrics.updatedAt < 5000;
+  const isFresh = now - metrics.updatedAt < 5000;
+  const sessionDuration = formatSessionDuration(now - participant.joinedAt);
 
   return (
     <div className="ft-card" style={{ padding: '0.875rem 1rem' }}>
@@ -87,7 +102,7 @@ function ParticipantMetric({ participant, isMe }: { participant: RoomParticipant
             {participant.name}{isMe ? ' (나)' : ''}
           </p>
           <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            {isFresh ? '실시간 업데이트 중' : '업데이트 대기 중'} · {participant.media.audioEnabled ? '마이크 켜짐' : '마이크 꺼짐'}
+            {isFresh ? '실시간 업데이트 중' : '업데이트 대기 중'} · {participant.media.audioEnabled ? '마이크 켜짐' : '마이크 꺼짐'} · 유지 {sessionDuration}
           </p>
         </div>
         <span className="h-2 w-2 rounded-full" style={{ background: isFresh ? 'var(--color-success)' : 'var(--color-text-muted)' }} />
@@ -125,9 +140,15 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
   const [isLeaving, setIsLeaving] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
+  const [now, setNow] = useState(() => Date.now());
   const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const {
     coordinates,
@@ -250,6 +271,11 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
   });
   const isInviteRoom = room?.roomType === 'invite' || joinMode.type !== 'public';
   const waitingLabel = isInviteRoom ? '초대코드 참가자 대기 중' : '랜덤 참가자 대기 중';
+  const roomStartedAt = participants.length > 0
+    ? Math.min(...participants.map((participant) => participant.joinedAt))
+    : null;
+  const sessionStartedAt = me?.joinedAt ?? roomStartedAt;
+  const sessionDuration = formatSessionDuration(sessionStartedAt == null ? null : now - sessionStartedAt);
 
   if (error && !room && !localStream) {
     return (
@@ -374,6 +400,15 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
                   <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-soft)' }}>
                     {room?.roomId ?? '매칭 중'} · {participants.length}/{room?.maxParticipants ?? 5}명
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium"
+                      style={{ background: 'var(--color-brand-50)', color: 'var(--color-brand-700)', border: '1px solid var(--color-brand-200)' }}
+                    >
+                      <i className="ti ti-clock-hour-4 text-sm" aria-hidden="true" />
+                      세션 유지 {sessionDuration}
+                    </span>
+                  </div>
                   {room?.inviteCode && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-md px-3 py-1.5 text-sm font-medium tracking-[0.2em]"
@@ -439,7 +474,7 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
 
             <div className="space-y-2">
               {participants.map((p) => (
-                <ParticipantMetric key={p.id} participant={p} isMe={p.id === clientId} />
+                <ParticipantMetric key={p.id} participant={p} isMe={p.id === clientId} now={now} />
               ))}
             </div>
           </aside>
