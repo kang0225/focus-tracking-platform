@@ -88,7 +88,7 @@ resource "aws_iam_role" "github_actions_iam_role" {
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role_policy.json
 }
 
-# Github Actions을 Terraform에서 사용하기 위한 IAM 정책
+# Github Actions IAM 정책 문서 (1/3) - 백엔드/네트워크/EC2/ELB
 data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
   statement {
     sid    = "AllowStateBucketAccess" # 임의의 상태 ID
@@ -198,7 +198,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
 
     resources = ["*"]
   }
+}
 
+# Github Actions IAM 정책 문서 (2/3) - 컴퓨팅/스토리지/모니터링
+# IAM 관리형 정책은 공백 제외 최대 6144자라 정책 문서를 3개로 분할한다.
+data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
   statement {
     sid    = "AllowAutoScalingManagement"
     effect = "Allow"
@@ -328,7 +332,10 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
 
     resources = ["*"]
   }
+}
 
+# Github Actions IAM 정책 문서 (3/3) - IAM/배포/애플리케이션 서비스
+data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
   statement {
     sid    = "AllowIAMManagement"
     effect = "Allow"
@@ -523,14 +530,34 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document" {
   }
 }
 
-# aws에 github actions을 위한 실제 IAM 정책을 생성
+# aws에 github actions을 위한 실제 IAM 정책을 생성 (관리형 정책 6144자 한도로 3개 분할)
 resource "aws_iam_policy" "github_actions_permissions_policy" {
   name   = "${var.project_name}-${var.environment}-github-actions-terraform-policy"
   policy = data.aws_iam_policy_document.github_actions_permissions_policy_document.json # 위에서 만든 IAM 정책을 json 형태로 변환
+}
+
+resource "aws_iam_policy" "github_actions_permissions_policy_2" {
+  name   = "${var.project_name}-${var.environment}-github-actions-terraform-policy-2"
+  policy = data.aws_iam_policy_document.github_actions_permissions_policy_document_2.json
+}
+
+resource "aws_iam_policy" "github_actions_permissions_policy_3" {
+  name   = "${var.project_name}-${var.environment}-github-actions-terraform-policy-3"
+  policy = data.aws_iam_policy_document.github_actions_permissions_policy_document_3.json
 }
 
 # 만든 IAM 정책들을 ROLE에 연결
 resource "aws_iam_role_policy_attachment" "github_actions_permissions_attachment" {
   role       = aws_iam_role.github_actions_iam_role.name
   policy_arn = aws_iam_policy.github_actions_permissions_policy.arn # 방금 생성한 IAM 정책의 주소
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_permissions_attachment_2" {
+  role       = aws_iam_role.github_actions_iam_role.name
+  policy_arn = aws_iam_policy.github_actions_permissions_policy_2.arn
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_permissions_attachment_3" {
+  role       = aws_iam_role.github_actions_iam_role.name
+  policy_arn = aws_iam_policy.github_actions_permissions_policy_3.arn
 }
