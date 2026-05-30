@@ -16,6 +16,9 @@
 export const RANKING_FORMULA_VERSION = 1 as const;
 export const TARGET_MINUTES = 50;
 export const MIN_VALID_MINUTES = 10;
+export const RANKING_TIMEZONE_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export type RankingRange = 'day' | 'week' | 'month';
 
 export interface RankingInput {
   /** 분석된 focus ratio (0 ~ 1). validSeconds 기준. */
@@ -88,5 +91,29 @@ export function highFocusSecondsFromRatio(input: RankingInput): number {
  */
 export function toRankingDate(at: Date | number): string {
   const d = typeof at === 'number' ? new Date(at) : at;
-  return d.toISOString().slice(0, 10);
+  return new Date(d.getTime() + RANKING_TIMEZONE_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export function getRankingRangeDates(
+  dateStr: string,
+  range: RankingRange,
+): { start: string; end: string } {
+  const [year, month, dayOfMonth] = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, dayOfMonth));
+
+  if (range === 'day') return { start: dateStr, end: dateStr };
+
+  if (range === 'week') {
+    const day = d.getUTCDay();
+    const offsetToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() - offsetToMonday);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    return { start: toRankingDate(monday), end: toRankingDate(sunday) };
+  }
+
+  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  return { start: toRankingDate(start), end: toRankingDate(end) };
 }
