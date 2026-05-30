@@ -31,25 +31,17 @@ data "aws_ami" "ubuntu_2204_arm64" {
   }
 }
 
-##########################################
-## ECS-optimized AMI (Amazon Linux 2023) ##
-##########################################
-# ECS 에이전트가 미리 설치된 공식 이미지를 AWS SSM Parameter Store에서 조회
-# 이 파라미터는 AWS가 최신 이미지로 계속 업데이트해주기 때문에
-# 우리가 AMI ID를 매번 바꿀 필요가 없음
-data "aws_ssm_parameter" "ecs_ami_arm" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id"
-}
-
 ###############
 ### EC2 생성 ###
 ###############
 # ====================================================
-# 1. 앱 서버 (Web EC2) — ASG 기반으로 이관됨
+# 1. 앱 서버 — Fargate로 전환됨 (EC2/ASG 없음)
 # ====================================================
-# 기존 단일 EC2 → Launch Template + Auto Scaling Group
-# 새 위치: 24_capacity_provider.tf
-# 이관 이유: ECS Capacity Provider를 통한 자동 EC2 확장/축소 지원
+# 과거: 단일 EC2 -> Launch Template + ASG (24_capacity_provider.tf, 삭제됨)
+# 현재: ECS Fargate (13_ecs.tf service의 launch_type = "FARGATE")
+#       blue/green 배포 중 Capacity Provider 미확장 이슈 해결 위해 전환
+# 참고: ECS-optimized AMI(ecs_ami_arm) 데이터소스는 앱 EC2 제거로 더 이상 쓰이지 않아 삭제함
+#       (ML EC2는 아래처럼 Ubuntu ARM AMI를 사용)
 # ====================================================
 
 
@@ -67,7 +59,7 @@ resource "aws_instance" "ml_ec2" {
     encrypted   = true
   }
 
-  # ★ Docker 컨테이너 안에서 IMDSv2로 IAM 자격증명 가져오려면 hop limit 2 필요
+  # Docker 컨테이너 안에서 IMDSv2로 IAM 자격증명 가져오려면 hop limit 2 필요
   metadata_options {
     http_tokens                 = "required"
     http_endpoint               = "enabled"

@@ -110,34 +110,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency" {
 }
 
 ##############################################
-#### 6. EC2 CPU 크레딧 잔량 알람          ####
+#### 6. (EC2 CPU 크레딧 알람) — 제거됨        ####
 ##############################################
-# t4g는 버스터블 인스턴스 → baseline(40%) 이상 사용 시 크레딧 소모
-# 크레딧 고갈되면 강제 throttle 발생 (baseline 성능으로 제한)
-# unlimited 모드 안 쓰니까 standard 크레딧 모니터링 필수
-#
-# 알람 발생 시 대응 방안:
-#   - 일시적 부하: Auto Scaling이 Task 분산하며 자연 해소되는지 관찰
-#   - 지속 부하: Launch Template에서 cpu_credits = "unlimited"로 전환 검토
-#   - 또는 인스턴스 타입 상향 (m6g.large 등 non-burstable)
-resource "aws_cloudwatch_metric_alarm" "ec2_credit_balance_low" {
-  alarm_name          = "${var.project_name}-${var.environment}-ec2-cpu-credit-low"
-  alarm_description   = "ASG EC2의 CPU 크레딧 잔량 50개 미만 (곧 throttle 위험)"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 3 # 3번 연속 임계 미달 시 알람 (오탐 방지)
-  metric_name         = "CPUCreditBalance"
-  namespace           = "AWS/EC2"
-  period              = 300 # 5분 간격 측정
-  statistic           = "Average"
-  threshold           = 50 # 크레딧 50개 미만 = 약 2시간 풀로드 가능 분량
-
-  alarm_actions      = [aws_sns_topic.alerts.arn]
-  ok_actions         = [aws_sns_topic.alerts.arn]
-  treat_missing_data = "notBreaching"
-
-  # ASG의 모든 EC2 인스턴스에 대해 자동으로 적용됨
-  # (개별 EC2 ID 대신 ASG 이름으로 묶음 모니터링)
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
-  }
-}
+# Fargate 전환으로 관리할 EC2/ASG가 없어져 이 알람은 삭제됨.
+# (ASG·t4g 크레딧 개념이 사라짐)

@@ -46,21 +46,26 @@ resource "aws_ecs_task_definition" "app" {
   #   → 각 컨테이너가 고유 IP를 가짐 → 포트 충돌 없이 Blue/Green 가능
   network_mode = "awsvpc"
 
-  # EC2 launch type용 task
-  requires_compatibilities = ["EC2"]
+  # Fargate launch type용 task
+  requires_compatibilities = ["FARGATE"]
 
-  # 컨테이너에 할당할 자원
-  # cpu=768: 1 EC2(2 vCPU)에 Task 2개 적재 시 CPU 100% 활용
-  # memory=1536: Task 2개 합 3072 MB, t4g.medium 가용 ~3700 MB 중 헤드룸 ~630 MB 확보
-  # Task 1개 단독 실행 시엔 cpu가 소프트 리밋이라 burst로 2 vCPU까지 활용 가능
-  cpu    = "768"  # 1 vCPU
-  memory = "1536" # 1.5 GB
+  # 컨테이너에 할당할 자원 (Fargate는 정해진 cpu/memory 조합만 허용)
+  # 기존 EC2(768/1536)보다 자원을 줄이지 않도록 1 vCPU / 2 GB로 설정
+  # (cpu=1024에서 가능한 memory: 2048~8192 MB)
+  cpu    = "1024" # 1 vCPU
+  memory = "2048" # 2 GB
 
   # 컨테이너 실행 역할: ECR에서 이미지 pull + CloudWatch 로그 전송에 사용
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
 
   # 컨테이너 안 앱이 AWS 서비스(S3, DynamoDB 등) 호출할 때 쓸 역할
   task_role_arn = aws_iam_role.ecs_task_role.arn
+
+  # ★ Fargate는 ARM64 명시 필수 (현 앱 이미지가 ARM. 생략 시 X86_64로 떠서 실행 불가)
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
 
   # ★ 컨테이너 정의 (FE+BE 한 컨테이너에 통합 - 초기 버전)
   container_definitions = jsonencode([
@@ -128,13 +133,10 @@ resource "aws_ecs_service" "app" {
 
   desired_count = 1 # 평상시 1개 유지 (Auto Scaling으로 부하 시 2개까지 확장)
 
-  # ★ launch_type 대신 Capacity Provider 사용 (24_capacity_provider.tf 참조)
-  # 이 전략을 통해 ECS가 ASG에 "EC2 더 필요해" 신호를 보낼 수 있게 됨
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.app.name
-    weight            = 100 # 100% 이 Provider로 배치
-    base              = 1   # 최소 1개 Task는 무조건 이 Provider에
-  }
+  # ★ Fargate launch type (서버리스 — EC2/ASG/Capacity Provider 불필요)
+  #   task마다 컴퓨팅·ENI가 독립 할당되어 blue/green 시 자리 부족 문제가 없음
+  launch_type      = "FARGATE"
+  platform_version = "LATEST"
 
   # ★ Blue/Green 배포 하려면 반드시 CODE_DEPLOY로 설정
   deployment_controller {
@@ -162,7 +164,7 @@ resource "aws_ecs_service" "app" {
     container_port   = var.app_port
   }
 
-  # CodeDeploy가 배포 중에 task_definition, load_balancer, capacity_provider_strategy를 바꿈
+  # CodeDeploy가 배포 중에 task_definition, load_balancer를 바꿈
   # Auto Scaling이 desired_count를 바꿈
   # Terraform이 되돌리지 않도록 모두 무시
   lifecycle {
@@ -170,15 +172,12 @@ resource "aws_ecs_service" "app" {
       task_definition,
       load_balancer,
       desired_count,
-      capacity_provider_strategy,
     ]
   }
 
   # ALB 리스너 먼저 생성돼야 서비스 등록 가능
-  # Capacity Provider도 클러스터에 등록된 후에 Service가 참조할 수 있음
   depends_on = [
     aws_lb_listener.prod_https,
-    aws_ecs_cluster_capacity_providers.app,
   ]
 
   tags = {
