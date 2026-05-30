@@ -27,7 +27,7 @@ resource "aws_appautoscaling_target" "ecs_service" {
 
   # Task 개수 범위
   min_capacity = 1 # 최소 1개 (절대 0 안 됨)
-  max_capacity = 2 # 최대 2개 (1 EC2당 ENI 2개 한계 = 1 EC2에 2 Task)
+  max_capacity = 1 # 최대 2개 (1 EC2당 ENI 2개 한계 = 1 EC2에 2 Task)
 
   tags = {
     Name = "${var.project_name}-${var.environment}-ecs-asg-target"
