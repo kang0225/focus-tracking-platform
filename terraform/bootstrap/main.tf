@@ -216,8 +216,6 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
       "autoscaling:AttachLoadBalancerTargetGroups", "autoscaling:DetachLoadBalancerTargetGroups",
       "autoscaling:EnableMetricsCollection", "autoscaling:DisableMetricsCollection",
       "autoscaling:SuspendProcesses", "autoscaling:ResumeProcesses",
-      # scale-in 보호(protect_from_scale_in=true)된 ASG 삭제 시 인스턴스 보호 해제용
-      "autoscaling:SetInstanceProtection",
       "application-autoscaling:Describe*", "application-autoscaling:ListTagsForResource",
       "application-autoscaling:RegisterScalableTarget", "application-autoscaling:DeregisterScalableTarget",
       "application-autoscaling:PutScalingPolicy", "application-autoscaling:DeleteScalingPolicy",
