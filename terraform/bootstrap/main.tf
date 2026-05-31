@@ -433,6 +433,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_3" {
       "codedeploy:CreateDeploymentGroup", "codedeploy:DeleteDeploymentGroup",
       "codedeploy:UpdateDeploymentGroup",
       "codedeploy:CreateDeployment", "codedeploy:StopDeployment",
+      "codedeploy:RegisterApplicationRevision",
       "codedeploy:TagResource", "codedeploy:UntagResource",
     ]
 
