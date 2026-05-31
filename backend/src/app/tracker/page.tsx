@@ -4,12 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import WebcamView from '@/components/WebcamView';
-import { HeartRateComparisonCard } from '@/components/HeartRateComparisonCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { isRppgMeasuringStatus, useRPPG } from '@/hooks/useRPPG';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useRollingHeartRateAverage } from '@/hooks/useRollingHeartRateAverage';
-import { buildHeartRateComparison } from '@/lib/heartRateComparison';
 import type { PairingData, PairingResponse } from '@/types/tracker';
 
 export default function TrackerPage() {
@@ -23,17 +21,10 @@ export default function TrackerPage() {
   const hasAppleWatchValues = isPaired && (data?.heartRate ?? 0) > 0;
   const hasAppleWatchConnection = isPaired && (data?.appleWatchPaired === true || hasAppleWatchValues);
 
-  const { bpm, confidence, status: rppgStatus } = useRPPG('webgazerVideoFeed', true);
-  const webcamHeartRate = useRollingHeartRateAverage(bpm, bpm > 0, 10, 'FacePhys Camera');
-  const appleWatchHeartRate = useRollingHeartRateAverage(data?.heartRate ?? 0, (data?.heartRate ?? 0) > 0, 10, 'Apple Watch');
+  const { bpm, status: rppgStatus } = useRPPG('webgazerVideoFeed', true);
+  const displayedHeartRate = useRollingHeartRateAverage(bpm, bpm > 0, 10, 'FacePhys Camera');
   const isRppgMeasuring = isRppgMeasuringStatus(rppgStatus);
-  const minuteHeartRateAverages = useMinuteHeartRateAverages(webcamHeartRate, webcamHeartRate > 0 || isRppgMeasuring);
-  const heartRateComparison = buildHeartRateComparison({
-    webcamHeartRate,
-    appleWatchHeartRate,
-    hasAppleWatchConnection,
-    isWebcamMeasuring: isRppgMeasuring,
-  });
+  const minuteHeartRateAverages = useMinuteHeartRateAverages(displayedHeartRate, displayedHeartRate > 0 || isRppgMeasuring);
 
   const generateCode = async () => {
     setLoading(true);
@@ -93,7 +84,7 @@ export default function TrackerPage() {
             iPhone 앱과 연결하기
           </h1>
           <p className="mt-1.5 text-sm" style={{ color: 'var(--color-text-soft)' }}>
-            Apple Watch를 연결하면 웹캠 rPPG 심박수와 자동으로 비교합니다.
+            Apple Watch를 연결해도 화면에서는 웹캠 심박 측정을 계속 보여줍니다.
           </p>
         </div>
 
@@ -164,27 +155,18 @@ export default function TrackerPage() {
             {hasAppleWatchConnection && (
               <div className="ft-card" style={{ background: 'var(--color-brand-50)', borderColor: 'var(--color-brand-200)' }}>
                 <p className="text-sm font-medium" style={{ color: 'var(--color-brand-700)' }}>Apple Watch 연결됨</p>
-                {hasAppleWatchValues ? (
-                  <div className="mt-3 rounded-md bg-white px-3 py-3">
-                    <p className="text-2xl font-medium" style={{ color: 'var(--color-brand-900)' }}>{appleWatchHeartRate || '--'}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-soft)' }}>Apple Watch 심박수</p>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>심박수 수신을 기다리는 중...</p>
-                )}
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>
+                  {hasAppleWatchValues ? '심박 수신 중입니다.' : '심박 수신을 기다리는 중입니다.'}
+                </p>
               </div>
             )}
 
             <div className="ft-card">
-              <p className="text-sm font-medium" style={{ color: 'var(--color-brand-700)' }}>웹캠 rPPG</p>
-              <p className="mt-2 text-3xl font-medium" style={{ color: 'var(--color-brand-900)' }}>{webcamHeartRate || '--'}</p>
-              <p className="text-xs" style={{ color: 'var(--color-text-soft)' }}>현재 심박수 (FacePhys 웹캠)</p>
-              <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                {rppgStatus}{confidence != null ? ` · 신뢰도 ${Math.round(confidence * 100)}%` : ''}
-              </p>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-brand-700)' }}>심박수</p>
+              <p className="mt-2 text-3xl font-medium" style={{ color: 'var(--color-brand-900)' }}>{displayedHeartRate || '--'}</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-soft)' }}>현재 측정값</p>
+              <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{rppgStatus}</p>
             </div>
-
-            <HeartRateComparisonCard comparison={heartRateComparison} />
 
             <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
           </aside>

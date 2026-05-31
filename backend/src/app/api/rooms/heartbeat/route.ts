@@ -46,8 +46,6 @@ export async function POST(request: Request) {
         heartRate: body.metrics.heartRate ?? 0,
         heartRateSource: body.metrics.heartRateSource ?? '대기 중',
         appleWatchHeartRate: body.metrics.appleWatchHeartRate,
-        heartRateDifferenceBpm: body.metrics.heartRateDifferenceBpm,
-        heartRateReliabilityScore: body.metrics.heartRateReliabilityScore,
         focusScore: body.metrics.focusScore ?? 0,
         focusSource: body.metrics.focusSource,
         focusThreshold: body.metrics.focusThreshold,

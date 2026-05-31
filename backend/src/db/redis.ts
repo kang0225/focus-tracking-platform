@@ -95,8 +95,6 @@ export interface LiveMetricsPayload {
   heartRate: number;
   heartRateSource: string;
   appleWatchHeartRate?: number;
-  heartRateDifferenceBpm?: number | null;
-  heartRateReliabilityScore?: number | null;
   focusScore: number;
   focusSource?: string;
   focusThreshold?: number | null;

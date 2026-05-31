@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
-import { HeartRateComparisonCard } from '@/components/HeartRateComparisonCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
@@ -165,7 +164,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     heartRateSource,
     heartRateStatus,
     appleWatchHeartRate,
-    heartRateComparison,
     focusScore,
     focusRawScore,
     focusIsFocused,
@@ -181,8 +179,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     heartRate,
     heartRateSource,
     appleWatchHeartRate,
-    heartRateDifferenceBpm: heartRateComparison.differenceBpm,
-    heartRateReliabilityScore: heartRateComparison.reliabilityScore,
     focusScore,
     focusSource,
     focusThreshold: focusThresholdRawScore,
@@ -197,8 +193,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     focusSource,
     focusThresholdRawScore,
     heartRate,
-    heartRateComparison.differenceBpm,
-    heartRateComparison.reliabilityScore,
     heartRateSource,
   ]);
 
@@ -226,8 +220,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
       heartRateSource,
       heartRateStatus,
       appleWatchHeartRate,
-      heartRateDifferenceBpm: heartRateComparison.differenceBpm,
-      heartRateReliabilityScore: heartRateComparison.reliabilityScore,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -480,8 +472,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
                 집중 점수 출처: {isPaused ? '일시정지' : focusSource}
               </p>
             </div>
-
-            <HeartRateComparisonCard comparison={heartRateComparison} />
 
             <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
 

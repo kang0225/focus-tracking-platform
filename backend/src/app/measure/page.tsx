@@ -6,7 +6,6 @@ import Navbar from '@/components/Navbar';
 import WebcamView from '@/components/WebcamView';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
-import { HeartRateComparisonCard } from '@/components/HeartRateComparisonCard';
 import { StatusCard } from '@/components/StatusCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
@@ -50,14 +49,11 @@ export default function MeasurePage() {
     heartRateSource,
     heartRateStatus,
     appleWatchHeartRate,
-    appleWatchHeartRateStatus,
-    heartRateComparison,
     isHeartRateMeasuring,
     focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
     focusSource,
-    hasAppleWatchConnection,
     isTrackingReady,
   } = useConcentrationData({ paused: isPaused });
 
@@ -75,8 +71,6 @@ export default function MeasurePage() {
       heartRateSource,
       heartRateStatus,
       appleWatchHeartRate,
-      heartRateDifferenceBpm: heartRateComparison.differenceBpm,
-      heartRateReliabilityScore: heartRateComparison.reliabilityScore,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -142,18 +136,11 @@ export default function MeasurePage() {
             <div className="absolute right-4 top-4 w-52 space-y-2">
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-border)' }}>
                 <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>
-                  {isPaused ? 'Paused' : heartRateSource}
+                  심박수
                 </p>
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-danger)' }}>{heartRate > 0 ? heartRate : '--'}</p>
                 <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{heartRateStatus}</p>
               </div>
-              {hasAppleWatchConnection && (
-                <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-border)' }}>
-                  <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>Apple Watch</p>
-                  <p className="text-2xl font-medium" style={{ color: 'var(--color-danger)' }}>{appleWatchHeartRate > 0 ? appleWatchHeartRate : '--'}</p>
-                  <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{appleWatchHeartRateStatus}</p>
-                </div>
-              )}
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-brand-200)' }}>
                 <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>{focusSource} 집중 점수</p>
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-brand-600)' }}>{focusDisplayScore}</p>
@@ -169,7 +156,7 @@ export default function MeasurePage() {
           <aside className="space-y-3">
             <StatusCard label="카메라" status={isPaused ? '일시정지' : '동작 중'} isActive={!isPaused} colorClass="emerald" />
             <StatusCard
-              label={`심박수 (${heartRateSource})`}
+              label="심박수"
               status={heartRateStatus}
               isActive={!isPaused && (heartRate > 0 || isHeartRateMeasuring)}
               colorClass="red"
@@ -180,7 +167,6 @@ export default function MeasurePage() {
               isActive={!isPaused && isLoaded && isCalibrated}
               colorClass="blue"
             />
-            <HeartRateComparisonCard comparison={heartRateComparison} />
 
             <button
               onClick={() => void finishSession()}
