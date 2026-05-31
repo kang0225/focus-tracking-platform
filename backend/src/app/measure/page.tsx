@@ -6,14 +6,13 @@ import Navbar from '@/components/Navbar';
 import WebcamView from '@/components/WebcamView';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
-import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
+import { HeartRateComparisonCard } from '@/components/HeartRateComparisonCard';
 import { StatusCard } from '@/components/StatusCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useTrackingStreamPublisher } from '@/hooks/useTrackingStreamPublisher';
-import type { HeartRateSourcePreference } from '@/types/tracker';
 
 function makeTrackingId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -32,7 +31,6 @@ export default function MeasurePage() {
   const createTrackingAnalysisJob = useTrackingAnalysisJob();
   const [isFinishing, setIsFinishing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const soloMeetingId = useMemo(() => makeTrackingId('solo'), []);
   // userId 는 백엔드가 인증된 세션으로부터 강제 주입하므로 클라이언트에서 생성하지 않음.
 
@@ -51,6 +49,9 @@ export default function MeasurePage() {
     heartRate,
     heartRateSource,
     heartRateStatus,
+    appleWatchHeartRate,
+    appleWatchHeartRateStatus,
+    heartRateComparison,
     isHeartRateMeasuring,
     focusRawScore,
     focusIsFocused,
@@ -58,7 +59,7 @@ export default function MeasurePage() {
     focusSource,
     hasAppleWatchConnection,
     isTrackingReady,
-  } = useConcentrationData({ paused: isPaused, heartRateSourcePreference });
+  } = useConcentrationData({ paused: isPaused });
 
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && (heartRate > 0 || isHeartRateMeasuring));
   const focusDisplayScore = formatMetric(focusRawScore);
@@ -73,6 +74,9 @@ export default function MeasurePage() {
       heartRate,
       heartRateSource,
       heartRateStatus,
+      appleWatchHeartRate,
+      heartRateDifferenceBpm: heartRateComparison.differenceBpm,
+      heartRateReliabilityScore: heartRateComparison.reliabilityScore,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -116,13 +120,6 @@ export default function MeasurePage() {
             <h1 className="mt-0.5 text-2xl font-medium" style={{ color: 'var(--color-brand-900)' }}>집중도 분석</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <HeartRateSourceSelector
-              value={heartRateSourcePreference}
-              onChange={setHeartRateSourcePreference}
-              disabled={isFinishing}
-              appleWatchConnected={hasAppleWatchConnection}
-              className="w-56"
-            />
             <button
               type="button"
               onClick={() => setIsPaused((c) => !c)}
@@ -150,6 +147,13 @@ export default function MeasurePage() {
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-danger)' }}>{heartRate > 0 ? heartRate : '--'}</p>
                 <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{heartRateStatus}</p>
               </div>
+              {hasAppleWatchConnection && (
+                <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-border)' }}>
+                  <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>Apple Watch</p>
+                  <p className="text-2xl font-medium" style={{ color: 'var(--color-danger)' }}>{appleWatchHeartRate > 0 ? appleWatchHeartRate : '--'}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{appleWatchHeartRateStatus}</p>
+                </div>
+              )}
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-brand-200)' }}>
                 <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>{focusSource} 집중 점수</p>
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-brand-600)' }}>{focusDisplayScore}</p>
@@ -176,6 +180,7 @@ export default function MeasurePage() {
               isActive={!isPaused && isLoaded && isCalibrated}
               colorClass="blue"
             />
+            <HeartRateComparisonCard comparison={heartRateComparison} />
 
             <button
               onClick={() => void finishSession()}

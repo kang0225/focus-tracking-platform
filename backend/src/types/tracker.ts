@@ -1,6 +1,17 @@
 // src/types/tracker.ts
 
-export type HeartRateSourcePreference = 'webcam' | 'apple-watch';
+export type HeartRateReliabilityLevel = 'high' | 'medium' | 'low' | 'unavailable';
+
+export interface HeartRateComparison {
+  webcamHeartRate: number;
+  appleWatchHeartRate: number;
+  differenceBpm: number | null;
+  reliabilityScore: number | null;
+  level: HeartRateReliabilityLevel;
+  label: string;
+  status: string;
+  description: string;
+}
 
 export interface PairingData {
   status: 'waiting' | 'active';
@@ -21,6 +32,9 @@ export interface FocusMetrics {
   gazeY: number;
   heartRate: number;
   heartRateSource: string;
+  appleWatchHeartRate?: number;
+  heartRateDifferenceBpm?: number | null;
+  heartRateReliabilityScore?: number | null;
   focusScore: number;
   focusSource?: string;
   focusThreshold?: number | null;
