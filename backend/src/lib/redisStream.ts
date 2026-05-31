@@ -204,6 +204,9 @@ export interface TrackingStreamPayload {
   heartRate: number;
   heartRateSource: string;
   heartRateStatus?: string;
+  appleWatchHeartRate?: number;
+  heartRateDifferenceBpm?: number | null;
+  heartRateReliabilityScore?: number | null;
   gaze: {
     x: number;
     y: number;

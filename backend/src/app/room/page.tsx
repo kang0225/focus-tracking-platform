@@ -5,14 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
-import { HeartRateSourceSelector } from '@/components/HeartRateSourceSelector';
+import { HeartRateComparisonCard } from '@/components/HeartRateComparisonCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
 import { useTrackingStreamPublisher } from '@/hooks/useTrackingStreamPublisher';
 import { useVideoRoom, type RoomJoinMode } from '@/hooks/useVideoRoom';
-import type { FocusMetrics, HeartRateSourcePreference, RoomParticipant } from '@/types/tracker';
+import type { FocusMetrics, RoomParticipant } from '@/types/tracker';
 
 interface StreamVideoProps {
   stream: MediaStream | null;
@@ -141,7 +141,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
   const [isPaused, setIsPaused] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
   const [now, setNow] = useState(() => Date.now());
-  const [heartRateSourcePreference, setHeartRateSourcePreference] = useState<HeartRateSourcePreference>('webcam');
   const defaultNameRef = useRef(`사용자-${Math.floor(Math.random() * 900 + 100)}`);
   const displayName = name.trim() || defaultNameRef.current;
 
@@ -165,14 +164,15 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     heartRate,
     heartRateSource,
     heartRateStatus,
+    appleWatchHeartRate,
+    heartRateComparison,
     focusScore,
     focusRawScore,
     focusIsFocused,
     focusThresholdRawScore,
     focusSource,
-    hasAppleWatchConnection,
     isTrackingReady,
-  } = useConcentrationData({ paused: isPaused, heartRateSourcePreference });
+  } = useConcentrationData({ paused: isPaused });
 
   const minuteHeartRateAverages = useMinuteHeartRateAverages(heartRate, !isPaused && heartRate > 0);
   const metrics: FocusMetrics = useMemo(() => ({
@@ -180,12 +180,27 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     gazeY: coordinates.y,
     heartRate,
     heartRateSource,
+    appleWatchHeartRate,
+    heartRateDifferenceBpm: heartRateComparison.differenceBpm,
+    heartRateReliabilityScore: heartRateComparison.reliabilityScore,
     focusScore,
     focusSource,
     focusThreshold: focusThresholdRawScore,
     focusIsFocused,
     updatedAt: Date.now(),
-  }), [coordinates.x, coordinates.y, focusIsFocused, focusScore, focusSource, focusThresholdRawScore, heartRate, heartRateSource]);
+  }), [
+    appleWatchHeartRate,
+    coordinates.x,
+    coordinates.y,
+    focusIsFocused,
+    focusScore,
+    focusSource,
+    focusThresholdRawScore,
+    heartRate,
+    heartRateComparison.differenceBpm,
+    heartRateComparison.reliabilityScore,
+    heartRateSource,
+  ]);
 
   const {
     clientId,
@@ -210,6 +225,9 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
       heartRate,
       heartRateSource,
       heartRateStatus,
+      appleWatchHeartRate,
+      heartRateDifferenceBpm: heartRateComparison.differenceBpm,
+      heartRateReliabilityScore: heartRateComparison.reliabilityScore,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -315,13 +333,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-soft)' }}>{status}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <HeartRateSourceSelector
-              value={heartRateSourcePreference}
-              onChange={setHeartRateSourcePreference}
-              disabled={isLeaving}
-              appleWatchConnected={hasAppleWatchConnection}
-              className="w-44"
-            />
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -469,6 +480,8 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
                 집중 점수 출처: {isPaused ? '일시정지' : focusSource}
               </p>
             </div>
+
+            <HeartRateComparisonCard comparison={heartRateComparison} />
 
             <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
 
