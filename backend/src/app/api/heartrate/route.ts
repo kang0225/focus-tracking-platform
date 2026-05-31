@@ -43,12 +43,11 @@ export async function POST(request: Request) {
 
     const previousMetrics = await redis.getWatchHeartRate(userId);
 
-    // Apple Watch는 웹캠 rPPG와 비교할 심박수 기준값으로만 사용한다.
-    // 집중 점수/threshold는 브라우저의 FacePhys 계산 결과만 사용한다.
+    // Watch는 웹캠 측정 경험을 보조하는 심박 수신값으로만 보관한다.
     const heartRate = finiteNumber(body.heartRate) ?? previousMetrics?.heartRate ?? 0;
     const hasWatchMetrics = heartRate > 0;
 
-    // Redis Watch metrics 갱신 — PC 쪽이 /api/pair/current 에서 비교용으로 읽어감.
+    // Redis Watch metrics 갱신 — PC 쪽이 /api/pair/current 에서 읽어감.
     await redis.setWatchHeartRate(userId, {
       heartRate,
       updatedAt: Date.now(),
