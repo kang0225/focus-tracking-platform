@@ -8,6 +8,7 @@ import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
 import { StatusCard } from '@/components/StatusCard';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
+import { AppleWatchHeartRateCard } from '@/components/AppleWatchHeartRateCard';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
@@ -49,6 +50,7 @@ export default function MeasurePage() {
     heartRateSource,
     heartRateStatus,
     appleWatchHeartRate,
+    hasAppleWatchConnection,
     isHeartRateMeasuring,
     focusRawScore,
     focusIsFocused,
@@ -70,7 +72,6 @@ export default function MeasurePage() {
       heartRate,
       heartRateSource,
       heartRateStatus,
-      appleWatchHeartRate,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -136,11 +137,16 @@ export default function MeasurePage() {
             <div className="absolute right-4 top-4 w-52 space-y-2">
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-border)' }}>
                 <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>
-                  심박수
+                  웹캠 심박수
                 </p>
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-danger)' }}>{heartRate > 0 ? heartRate : '--'}</p>
                 <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{heartRateStatus}</p>
               </div>
+              <AppleWatchHeartRateCard
+                heartRate={appleWatchHeartRate}
+                isConnected={hasAppleWatchConnection}
+                compact
+              />
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--color-brand-200)' }}>
                 <p className="text-[10px] uppercase" style={{ color: 'var(--color-text-soft)' }}>{focusSource} 집중 점수</p>
                 <p className="text-2xl font-medium" style={{ color: 'var(--color-brand-600)' }}>{focusDisplayScore}</p>

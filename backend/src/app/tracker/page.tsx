@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import WebcamView from '@/components/WebcamView';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
+import { AppleWatchHeartRateCard } from '@/components/AppleWatchHeartRateCard';
 import { isRppgMeasuringStatus, useRPPG } from '@/hooks/useRPPG';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useRollingHeartRateAverage } from '@/hooks/useRollingHeartRateAverage';
@@ -20,6 +21,7 @@ export default function TrackerPage() {
   const isPaired = !!data && data.status === 'active';
   const hasAppleWatchValues = isPaired && (data?.heartRate ?? 0) > 0;
   const hasAppleWatchConnection = isPaired && (data?.appleWatchPaired === true || hasAppleWatchValues);
+  const appleWatchHeartRate = data?.heartRate ?? 0;
 
   const { bpm, status: rppgStatus } = useRPPG('webgazerVideoFeed', true);
   const displayedHeartRate = useRollingHeartRateAverage(bpm, bpm > 0, 10, 'FacePhys Camera');
@@ -162,11 +164,16 @@ export default function TrackerPage() {
             )}
 
             <div className="ft-card">
-              <p className="text-sm font-medium" style={{ color: 'var(--color-brand-700)' }}>심박수</p>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-brand-700)' }}>웹캠 심박수</p>
               <p className="mt-2 text-3xl font-medium" style={{ color: 'var(--color-brand-900)' }}>{displayedHeartRate || '--'}</p>
               <p className="text-xs" style={{ color: 'var(--color-text-soft)' }}>현재 측정값</p>
               <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{rppgStatus}</p>
             </div>
+
+            <AppleWatchHeartRateCard
+              heartRate={appleWatchHeartRate}
+              isConnected={hasAppleWatchConnection}
+            />
 
             <MinuteHeartRateAverageBox averages={minuteHeartRateAverages} />
           </aside>

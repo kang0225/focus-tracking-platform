@@ -94,7 +94,6 @@ export interface LiveMetricsPayload {
   gazeY: number;
   heartRate: number;
   heartRateSource: string;
-  appleWatchHeartRate?: number;
   focusScore: number;
   focusSource?: string;
   focusThreshold?: number | null;
