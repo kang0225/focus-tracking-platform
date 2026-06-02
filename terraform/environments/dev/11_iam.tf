@@ -35,6 +35,8 @@ data "aws_iam_policy_document" "codedeploy_assume_role" {
   }
 }
 
+# [DISABLED 2026-06-02] Grafana 비활성화 — 27_grafana.tf.disabled 참고. 재활성화 시 주석 해제.
+/*
 # Grafana 서비스가 이 역할을 빌려 CloudWatch를 조회할 수 있게 허용
 data "aws_iam_policy_document" "grafana_assume_role" {
   statement {
@@ -45,6 +47,7 @@ data "aws_iam_policy_document" "grafana_assume_role" {
     }
   }
 }
+*/
 
 # Fargate로 전환하여 웹 EC2 Role은 제거됨.
 
@@ -171,11 +174,13 @@ resource "aws_iam_role_policy" "ml_ec2_bedrock" {
   })
 }
 
+# [DISABLED 2026-06-02] Grafana 비활성화 — 27_grafana.tf.disabled 참고. 재활성화 시 주석 해제.
+/*
 ##########################################
 ### Grafana 서비스 역할 (Amazon Managed Grafana) ###
 ##########################################
 
-# Amazon Managed Grafana 워크스페이스(27_grafana.tf)가 사용하는 서비스 역할
+# Amazon Managed Grafana 워크스페이스(27_grafana.tf.disabled)가 사용하는 서비스 역할
 resource "aws_iam_role" "grafana" {
   name               = "${var.project_name}-${var.environment}-grafana-role"
   assume_role_policy = data.aws_iam_policy_document.grafana_assume_role.json
@@ -235,3 +240,4 @@ resource "aws_iam_role_policy" "grafana_cloudwatch" {
   role   = aws_iam_role.grafana.id
   policy = data.aws_iam_policy_document.grafana_cloudwatch.json
 }
+*/

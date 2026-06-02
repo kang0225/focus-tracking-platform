@@ -55,6 +55,8 @@ output "postgres_master_user_secret_arn" {
   sensitive   = true
 }
 
+# [DISABLED 2026-06-02] Grafana 비활성화 — 27_grafana.tf.disabled 참고. 재활성화 시 주석 해제.
+/*
 output "grafana_workspace_endpoint" {
   description = "Amazon Managed Grafana 워크스페이스 접속 URL"
   value       = "https://${aws_grafana_workspace.main.endpoint}"
@@ -64,3 +66,4 @@ output "grafana_workspace_id" {
   description = "Amazon Managed Grafana 워크스페이스 ID"
   value       = aws_grafana_workspace.main.id
 }
+*/
