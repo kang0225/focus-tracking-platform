@@ -2,6 +2,7 @@ import net from 'node:net';
 
 const DEFAULT_REDIS_HOST = '10.0.11.0';
 const DEFAULT_REDIS_PORT = 6379;
+const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 1_000;
 const DEFAULT_STREAM_MAXLEN = 10_800;
 
 interface RedisCommand {
@@ -21,10 +22,16 @@ function getRedisConfig() {
   const rawHost = (process.env.REDIS_HOST || DEFAULT_REDIS_HOST).trim();
   const host = rawHost.includes('/') ? rawHost.split('/')[0] : rawHost;
   const port = Number(process.env.REDIS_PORT ?? DEFAULT_REDIS_PORT);
+  const connectTimeoutMs = Number(
+    process.env.REDIS_CONNECT_TIMEOUT_MS ?? DEFAULT_REDIS_CONNECT_TIMEOUT_MS,
+  );
 
   return {
     host,
     port: Number.isFinite(port) ? port : DEFAULT_REDIS_PORT,
+    connectTimeoutMs: Number.isFinite(connectTimeoutMs) && connectTimeoutMs > 0
+      ? connectTimeoutMs
+      : DEFAULT_REDIS_CONNECT_TIMEOUT_MS,
   };
 }
 
@@ -144,7 +151,7 @@ function connectRedis() {
   if (connecting) return connecting;
 
   connecting = new Promise<void>((resolve, reject) => {
-    const { host, port } = getRedisConfig();
+    const { host, port, connectTimeoutMs } = getRedisConfig();
     const nextSocket = net.createConnection({ host, port });
     socket = nextSocket;
     let hasConnected = false;
@@ -174,7 +181,7 @@ function connectRedis() {
       closeSocket();
       failPending(error);
     });
-    nextSocket.setTimeout(5_000, () => {
+    nextSocket.setTimeout(connectTimeoutMs, () => {
       const error = new Error('Redis connection timed out.');
       closeSocket();
       failPending(error);
