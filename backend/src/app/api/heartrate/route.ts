@@ -40,22 +40,46 @@ export async function POST(request: Request) {
     }
     const userId = codeRow.issuerUserId;
 
-    const previousMetrics = await redis.getWatchHeartRate(userId);
+    let previousMetrics: Awaited<ReturnType<typeof redis.getWatchHeartRate>> = null;
+    try {
+      previousMetrics = await redis.getWatchHeartRate(userId);
+    } catch (error) {
+      console.warn('[heartrate] failed to read previous watch metrics:', error);
+    }
 
     // Watch는 웹캠 측정 경험을 보조하는 심박 수신값으로만 보관한다.
     const heartRate = finiteNumber(body.heartRate) ?? previousMetrics?.heartRate ?? 0;
     // Redis Watch metrics 갱신 — PC 쪽이 /api/pair/current 에서 읽어감.
-    await redis.setWatchHeartRate(userId, {
-      heartRate,
-      updatedAt: Date.now(),
-    });
+    let storedWatchMetrics = false;
+    try {
+      await redis.setWatchHeartRate(userId, {
+        heartRate,
+        updatedAt: Date.now(),
+      });
+      storedWatchMetrics = true;
+    } catch (error) {
+      console.warn('[heartrate] failed to store watch metrics:', error);
+    }
 
     // 유효한 pairingCode 를 보낸 순간 앱 연결은 성립한 것으로 보고 active_pairings 를 생성/갱신한다.
     // iPhone 앱의 최초 페어링 요청은 heartRate 없이 들어올 수 있다.
-    await pairingRepo.markApplePaired(userId);
+    let markedApplePaired = false;
+    try {
+      await pairingRepo.markApplePaired(userId);
+      markedApplePaired = true;
+    } catch (error) {
+      console.warn('[heartrate] failed to mark active pairing:', error);
+    }
 
-    console.log(`[heartrate] code=${pairingCode} user=${userId.slice(0, 8)}… bpm=${heartRate}`);
-    return NextResponse.json({ success: true });
+    console.log(
+      `[heartrate] code=${pairingCode} user=${userId.slice(0, 8)}… bpm=${heartRate} ` +
+      `stored=${storedWatchMetrics} paired=${markedApplePaired}`,
+    );
+    return NextResponse.json({
+      success: true,
+      storedWatchMetrics,
+      markedApplePaired,
+    });
   } catch (error) {
     console.error('[heartrate] failed:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -22,9 +22,22 @@ export async function GET() {
     return NextResponse.json({ active: false }, { status: 401 });
   }
 
-  const pairing = await pairingRepo.getActivePairing(session.user.id);
-  const watchMetrics = await redis.getWatchHeartRate(session.user.id);
-  const legacyLiveMetrics = await redis.getLiveMetrics(session.user.id);
+  const pairing = await pairingRepo.getActivePairingStatus(session.user.id);
+  let watchMetrics: Awaited<ReturnType<typeof redis.getWatchHeartRate>> = null;
+  let legacyLiveMetrics: Awaited<ReturnType<typeof redis.getLiveMetrics>> = null;
+
+  try {
+    watchMetrics = await redis.getWatchHeartRate(session.user.id);
+  } catch (error) {
+    console.warn('[pair/current] failed to read watch metrics:', error);
+  }
+
+  try {
+    legacyLiveMetrics = await redis.getLiveMetrics(session.user.id);
+  } catch (error) {
+    console.warn('[pair/current] failed to read legacy metrics:', error);
+  }
+
   const legacyWatchMetrics = legacyLiveMetrics?.heartRateSource === 'Apple Watch'
     ? legacyLiveMetrics
     : null;
@@ -38,10 +51,9 @@ export async function GET() {
 
   return NextResponse.json({
     status: 'active' as const,
-    establishedAt: pairing?.establishedAt.getTime() ?? null,
-    updatedAt: appleWatchMetrics?.updatedAt ?? pairing?.updatedAt.getTime() ?? Date.now(),
-    appleWatchPaired: pairing?.appleWatchPaired === 'true'
-      || !!appleWatchMetrics,
+    establishedAt: pairing?.establishedAt?.getTime() ?? null,
+    updatedAt: appleWatchMetrics?.updatedAt ?? pairing?.updatedAt?.getTime() ?? Date.now(),
+    appleWatchPaired: pairing?.appleWatchPaired || !!appleWatchMetrics,
     heartRate: appleWatchMetrics?.heartRate ?? 0,
     focusScore: null,
     focusThreshold: null,
