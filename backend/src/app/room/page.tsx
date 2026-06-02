@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import { GazeCalibrationOverlay } from '@/components/GazeCalibrationOverlay';
 import GazeDot from '@/components/GazeDot';
 import { MinuteHeartRateAverageBox } from '@/components/MinuteHeartRateAverageBox';
+import { AppleWatchHeartRateCard } from '@/components/AppleWatchHeartRateCard';
 import { useConcentrationData } from '@/hooks/useConcentrationData';
 import { useMinuteHeartRateAverages } from '@/hooks/useMinuteHeartRateAverages';
 import { useTrackingAnalysisJob } from '@/hooks/useTrackingAnalysisJob';
@@ -164,6 +165,7 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     heartRateSource,
     heartRateStatus,
     appleWatchHeartRate,
+    hasAppleWatchConnection,
     focusScore,
     focusRawScore,
     focusIsFocused,
@@ -178,14 +180,12 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
     gazeY: coordinates.y,
     heartRate,
     heartRateSource,
-    appleWatchHeartRate,
     focusScore,
     focusSource,
     focusThreshold: focusThresholdRawScore,
     focusIsFocused,
     updatedAt: Date.now(),
   }), [
-    appleWatchHeartRate,
     coordinates.x,
     coordinates.y,
     focusIsFocused,
@@ -219,7 +219,6 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
       heartRate,
       heartRateSource,
       heartRateStatus,
-      appleWatchHeartRate,
       gazeX: coordinates.x,
       gazeY: coordinates.y,
       rawGazeX: rawCoordinates.x,
@@ -468,6 +467,11 @@ function ActiveVideoRoom({ joinMode }: { joinMode: RoomJoinMode }) {
                   <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>BPM</p>
                 </div>
               </div>
+              <AppleWatchHeartRateCard
+                heartRate={appleWatchHeartRate}
+                isConnected={hasAppleWatchConnection}
+                className="mt-3"
+              />
               <p className="mt-2 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                 집중 점수 출처: {isPaused ? '일시정지' : focusSource}
               </p>
