@@ -149,14 +149,24 @@ export async function getActivePairing(userId: string): Promise<ActivePairingRow
 }
 
 /**
- * heartrate route 가 Apple Watch 메트릭 첫 수신 시 호출. active_pairings 의
- * apple_watch_paired 컬럼을 갱신 (이미 행이 있어야 의미 있음).
+ * heartrate route 가 유효한 페어링 코드를 받으면 호출.
+ * iPhone 앱의 최초 페어링 요청은 heartRate 없이 code 만 보내므로,
+ * active_pairings 행이 없어도 생성해서 브라우저의 연결 상태를 안정적으로 유지한다.
  */
 export async function markApplePaired(userId: string): Promise<void> {
   await db
-    .update(activePairings)
-    .set({ appleWatchPaired: 'true', updatedAt: sql`now()` })
-    .where(eq(activePairings.userId, userId));
+    .insert(activePairings)
+    .values({
+      userId,
+      appleWatchPaired: 'true',
+    })
+    .onConflictDoUpdate({
+      target: activePairings.userId,
+      set: {
+        appleWatchPaired: 'true',
+        updatedAt: sql`now()`,
+      },
+    });
 }
 
 export async function clearActivePairing(userId: string): Promise<void> {
