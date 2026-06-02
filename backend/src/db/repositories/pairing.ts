@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { randomInt } from 'crypto';
-import { db } from '../client';
+import { db, pgPool } from '../client';
 import {
   pairingCodes,
   activePairings,
@@ -148,25 +148,92 @@ export async function getActivePairing(userId: string): Promise<ActivePairingRow
   return rows[0] ?? null;
 }
 
+export interface ActivePairingStatus {
+  establishedAt: Date | null;
+  updatedAt: Date | null;
+  appleWatchPaired: boolean;
+}
+
+export async function getActivePairingStatus(userId: string): Promise<ActivePairingStatus | null> {
+  try {
+    const rows = await db
+      .select({
+        establishedAt: activePairings.establishedAt,
+        updatedAt: activePairings.updatedAt,
+        appleWatchPaired: activePairings.appleWatchPaired,
+      })
+      .from(activePairings)
+      .where(eq(activePairings.userId, userId))
+      .limit(1);
+
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      establishedAt: row.establishedAt,
+      updatedAt: row.updatedAt,
+      appleWatchPaired: row.appleWatchPaired === 'true',
+    };
+  } catch (error) {
+    console.warn('[pairing] active_pairings flag lookup failed; using legacy lookup:', error);
+  }
+
+  const legacyRows = await pgPool.query<{
+    established_at: Date | null;
+    updated_at: Date | null;
+  }>(
+    `
+      select established_at, updated_at
+      from active_pairings
+      where user_id = $1
+      limit 1
+    `,
+    [userId],
+  );
+
+  const legacy = legacyRows.rows[0];
+  if (!legacy) return null;
+
+  return {
+    establishedAt: legacy.established_at,
+    updatedAt: legacy.updated_at,
+    appleWatchPaired: true,
+  };
+}
+
 /**
  * heartrate route 가 유효한 페어링 코드를 받으면 호출.
  * iPhone 앱의 최초 페어링 요청은 heartRate 없이 code 만 보내므로,
  * active_pairings 행이 없어도 생성해서 브라우저의 연결 상태를 안정적으로 유지한다.
  */
 export async function markApplePaired(userId: string): Promise<void> {
-  await db
-    .insert(activePairings)
-    .values({
-      userId,
-      appleWatchPaired: 'true',
-    })
-    .onConflictDoUpdate({
-      target: activePairings.userId,
-      set: {
+  try {
+    await db
+      .insert(activePairings)
+      .values({
+        userId,
         appleWatchPaired: 'true',
-        updatedAt: sql`now()`,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: activePairings.userId,
+        set: {
+          appleWatchPaired: 'true',
+          updatedAt: sql`now()`,
+        },
+      });
+  } catch (error) {
+    console.warn('[pairing] apple_watch_paired flag update failed; using legacy upsert:', error);
+
+    await pgPool.query(
+      `
+        insert into active_pairings (user_id, updated_at)
+        values ($1, now())
+        on conflict (user_id)
+        do update set updated_at = now()
+      `,
+      [userId],
+    );
+  }
 }
 
 export async function clearActivePairing(userId: string): Promise<void> {
