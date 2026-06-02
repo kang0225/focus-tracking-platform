@@ -17,7 +17,6 @@ export const dynamic = 'force-dynamic';
 interface WatchMetricsRequest {
   pairingCode?: string;
   heartRate?: unknown;
-  appleWatchPaired?: boolean;
 }
 
 function finiteNumber(value: unknown) {
@@ -28,7 +27,7 @@ function finiteNumber(value: unknown) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as WatchMetricsRequest;
-    const { pairingCode, appleWatchPaired } = body;
+    const { pairingCode } = body;
 
     if (!pairingCode) {
       return NextResponse.json({ error: 'pairingCode is required' }, { status: 400 });
@@ -45,23 +44,15 @@ export async function POST(request: Request) {
 
     // Watch는 웹캠 측정 경험을 보조하는 심박 수신값으로만 보관한다.
     const heartRate = finiteNumber(body.heartRate) ?? previousMetrics?.heartRate ?? 0;
-    const hasWatchMetrics = heartRate > 0;
-
     // Redis Watch metrics 갱신 — PC 쪽이 /api/pair/current 에서 읽어감.
     await redis.setWatchHeartRate(userId, {
       heartRate,
       updatedAt: Date.now(),
     });
 
-    // active_pairings 의 appleWatchPaired 플래그 갱신 (없으면 무시).
-    if (appleWatchPaired || hasWatchMetrics) {
-      try {
-        await pairingRepo.markApplePaired(userId);
-      } catch (err) {
-        // active_pairings 행이 아직 없을 수 있음 — 무시.
-        console.warn('[heartrate] markApplePaired skipped:', err);
-      }
-    }
+    // 유효한 pairingCode 를 보낸 순간 앱 연결은 성립한 것으로 보고 active_pairings 를 생성/갱신한다.
+    // iPhone 앱의 최초 페어링 요청은 heartRate 없이 들어올 수 있다.
+    await pairingRepo.markApplePaired(userId);
 
     console.log(`[heartrate] code=${pairingCode} user=${userId.slice(0, 8)}… bpm=${heartRate}`);
     return NextResponse.json({ success: true });
