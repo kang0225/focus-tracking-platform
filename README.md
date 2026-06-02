@@ -1,662 +1,367 @@
-# Focus Tracking Platform
+# 🎯 Focus Tracking Platform
 
-웹캠 기반 시선 추적과 심박수 측정을 활용한 **실시간 집중도 분석 플랫폼**입니다. WebGazer.js와 FacePhys ONNX 모델을 통해 사용자의 시선 움직임과 심박수를 추적하고, 집중도를 분석하는 엔드-투-엔드 솔루션입니다.
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonaws&logoColor=white)
+![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+> **웹캠만으로 학습 집중도를 실시간 분석하는 풀스택 플랫폼.**
+> WebGazer.js 시선 추적과 FacePhys ONNX 기반 원격 심박수 측정(rPPG)을 결합해
+> 분 단위 집중도를 계산하고, AWS Bedrock(Claude)으로 학습 습관 피드백까지 제공합니다.
+>
+> 🌐 **서비스**: [study-room.click](https://study-room.click)
+
+---
 
 ## 📋 목차
 
-- [주요 기능](#주요-기능)
-- [기술 스택](#기술-스택)
-- [프로젝트 구조](#프로젝트-구조)
-- [시작하기](#시작하기)
-- [API 문서](#api-문서)
-- [배포](#배포)
-- [아키텍처](#아키텍처)
-- [기여](#기여)
-- [라이선스](#라이선스)
+- [주요 기능](#-주요-기능)
+- [아키텍처 개요](#️-아키텍처-개요)
+- [기술 스택](#-기술-스택)
+- [모노레포 구조](#-모노레포-구조)
+- [로컬 개발 환경](#-로컬-개발-환경)
+- [환경 변수](#-환경-변수)
+- [API 개요](#-api-개요)
+- [FacePhys rPPG 심박수 측정](#-facephys-rppg-심박수-측정)
+- [배포 & CI/CD](#️-배포--cicd)
+- [모니터링](#-모니터링)
+- [기여](#-기여)
+- [라이선스](#-라이선스)
 
-## 주요 기능
+---
 
-- **🎯 실시간 시선 추적**: WebGazer.js를 이용한 웹캠 기반 시선 감지 및 캘리브레이션
-- **❤️ 심박수 측정**: FacePhys ONNX 모델을 통한 원격 광용적 신호(rPPG) 분석
-- **📊 집중도 분석**: 시선 안정성과 심박수 패턴을 기반으로 사용자의 집중도 계산
-- **🔄 실시간 대시보드**: 분석 결과를 실시간으로 시각화
-- **👥 협업 기능**: 비디오 룸을 통한 다중 사용자 실시간 협업 추적
-- **💾 데이터 분석**: AWS 스트림 기반의 대규모 데이터 처리 및 저장
-- **🔐 안전한 인증**: OAuth 기반 사용자 인증 및 권한 관리
+## ✨ 주요 기능
 
-## 기술 스택
+| 기능 | 설명 |
+| --- | --- |
+| 🎯 **실시간 시선 추적** | WebGazer.js 기반 웹캠 시선 감지 + 캘리브레이션, 시선 히트맵 생성 |
+| 🫀 **원격 심박수 측정 (rPPG)** | FacePhys ONNX 모델로 웹캠 영상에서 BPM 추정 (`onnxruntime-node`, 서버 추론) |
+| 📊 **분 단위 집중도 분석** | 시선 이탈률 + 심박/rPPG 추세를 결합해 `focus_score`·집중 상태·추세 산출 |
+| 🤖 **AI 학습 피드백** | 분석 결과를 AWS Bedrock **Claude Sonnet 4.5**로 요약한 자연어 학습 습관 피드백 |
+| 👥 **실시간 학습 룸** | WebRTC 시그널링 기반 룸 생성·초대·매칭, 참가자 하트비트 |
+| 🏆 **랭킹** | 집중 결과 기반 사용자 랭킹 |
+| 🔐 **Google OAuth 인증** | Google OAuth 2.0 로그인 + 자체 세션(`AUTH_SECRET`) |
 
-### Frontend
-- **Next.js 16.2.1** - React 프레임워크
-- **React 19.2.4** - UI 컴포넌트
-- **TypeScript** - 타입 안정성
-- **Tailwind CSS** - 스타일링
-- **WebGazer.js** - 웹캠 기반 시선 추적
-- **OpenCV.js** - 컴퓨터 비전 처리
+---
 
-### Backend
-- **Next.js API Routes** - Node.js 기반 API 서버
-- **ONNX Runtime** - ML 모델 추론 엔진
-- **WebSocket** - 실시간 데이터 전송
-- **Redis** - 스트림 데이터 처리
-- **PostgreSQL** - 데이터 저장소
+## 🏗️ 아키텍처 개요
 
-### ML/Analytics Service
-- **FastAPI** - Python 기반 API 서버
-- **Scikit-learn** - 머신러닝 알고리즘
-- **Pandas/NumPy** - 데이터 처리
-- **Redis** - 메시지 브로커
+서울 리전(`ap-northeast-2`)의 2-AZ VPC 위에 **ECS Fargate(앱) + EC2(ML/Redis) + RDS PostgreSQL** 로 구성되어 있습니다.
+인프라 상세(서브넷·보안그룹·배포·관측성)와 전체 다이어그램은 **[인프라 문서 → `terraform/README.md`](terraform/README.md)** 를 참고하세요.
 
-### Infrastructure
-- **AWS** - 클라우드 인프라
-  - ECS - 컨테이너 오케스트레이션
-  - ALB - 로드 밸런싱
-  - RDS - 관리형 데이터베이스
-  - S3 - 객체 저장소
-  - CloudFront - CDN
-  - Kinesis - 실시간 스트림 처리
-- **Docker** - 컨테이너화
-- **Terraform** - Infrastructure as Code
+```mermaid
+flowchart LR
+    user["👤 사용자<br/>브라우저 + 웹캠"]
 
-## 프로젝트 구조
+    subgraph edge["DNS / 엣지"]
+        r53["Route 53<br/>study-room.click"]
+        alb["ALB · HTTPS(443)"]
+    end
 
+    subgraph appt["애플리케이션 · ECS Fargate"]
+        next["Next.js 앱<br/>프론트엔드 + API :3000<br/>FacePhys ONNX 추론"]
+    end
+
+    subgraph datat["ML / 데이터"]
+        fastapi["FastAPI ML 서비스<br/>(EC2) :8000"]
+        redis[("Redis :6379<br/>실시간 추적 스트림")]
+        rds[("PostgreSQL<br/>RDS · Multi-AZ")]
+    end
+
+    bedrock["AWS Bedrock<br/>Claude Sonnet 4.5"]
+
+    user -->|HTTPS| r53 --> alb --> next
+    next -->|영속 데이터| rds
+    next -->|초 단위 추적 기록| redis
+    next -->|POST /analyze| fastapi
+    fastapi -->|세션 데이터 read| redis
+    fastapi -->|학습 피드백 생성| bedrock
 ```
+
+### 집중도 분석 데이터 흐름
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as 브라우저
+    participant N as Next.js (Fargate)
+    participant R as Redis (ML EC2)
+    participant M as FastAPI ML (EC2)
+    participant D as Bedrock (Claude)
+    participant P as PostgreSQL (RDS)
+
+    B->>N: 웹캠 프레임(rPPG) + 시선 좌표
+    N->>N: FacePhys ONNX 추론 → BPM
+    N->>R: 초 단위 추적 데이터 기록(Stream)
+    Note over B,N: 학습 세션 종료 → 분석 요청
+    N->>M: POST /analyze (userId, sessionId)
+    M->>R: 세션 기록 조회
+    M->>M: 분 단위 집중도 계산(focus score/state/trend)
+    M->>D: 학습 습관 피드백 생성
+    D-->>M: 자연어 피드백
+    M-->>N: 분석 결과 + 피드백 + 시선 히트맵
+    N->>P: 결과 저장
+    N-->>B: 대시보드 / 결과 시각화
+```
+
+---
+
+## 🧰 기술 스택
+
+### 프론트엔드 + 백엔드 (`backend/` · 단일 Next.js 컨테이너)
+
+| 영역 | 사용 기술 |
+| --- | --- |
+| 프레임워크 | **Next.js 16.2** (App Router, API Routes), **React 19.2** |
+| 언어/스타일 | TypeScript 5, Tailwind CSS 4 |
+| 시선 추적 | WebGazer.js |
+| 심박수 추론 | `onnxruntime-node` + FacePhys ONNX 모델 (서버 사이드) |
+| DB 접근 | **Drizzle ORM** + `pg` (PostgreSQL) |
+| 캐시/스트림 | Redis (실시간 추적 데이터, Redis Streams) |
+| 인증 | Google OAuth 2.0 |
+
+### ML 분석 서비스 (`ml-service/` · Python)
+
+| 영역 | 사용 기술 |
+| --- | --- |
+| API | **FastAPI** + Uvicorn |
+| 데이터 처리 | Pandas, NumPy |
+| 저장소 연동 | `redis-py` (asyncio) |
+| LLM 피드백 | `boto3` → **AWS Bedrock (Claude Sonnet 4.5)** |
+
+### 인프라 / 운영
+
+| 영역 | 사용 기술 |
+| --- | --- |
+| 컨테이너 오케스트레이션 | **AWS ECS Fargate** (앱), EC2(ML 서비스 + Redis) |
+| 로드밸런싱/DNS/TLS | ALB, Route 53, ACM |
+| 데이터베이스 | RDS for PostgreSQL (Multi-AZ) |
+| 레지스트리/배포 | ECR, **CodeDeploy Blue/Green** |
+| IaC | **Terraform** (S3 + DynamoDB 원격 상태) |
+| CI/CD | GitHub Actions (OIDC, 정적 키 없음) |
+| 관측성 | CloudWatch(로그·알람), SNS, **Datadog** |
+
+> 자세한 인프라 구성은 **[`terraform/README.md`](terraform/README.md)** 참고.
+
+---
+
+## 📁 모노레포 구조
+
+```text
 focus-tracking-platform/
-├── backend/                    # Next.js 프론트엔드 & 백엔드 API
-│   ├── public/
-│   │   ├── haarcascade_frontalface_alt.xml   # Haar Cascade 분류기
-│   │   ├── opencv.js                         # OpenCV 라이브러리
-│   │   ├── webgazer.js                       # WebGazer 라이브러리
-│   │   └── heartbeat.js                      # 하트비트 감지
+├── backend/                     # Next.js 앱 (프론트엔드 + API) — ECS Fargate 배포
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx                      # 메인 홈페이지 (시선 추적)
-│   │   │   ├── dashboard/                    # 대시보드
-│   │   │   ├── room/                         # 비디오 룸
-│   │   │   ├── tracker/                      # 트래킹 페이지
-│   │   │   ├── result/                       # 분석 결과
-│   │   │   └── api/
-│   │   │       ├── auth/                     # 인증 API
-│   │   │       ├── heartrate/                # 심박수 API
-│   │   │       ├── pair/                     # 페어링 API
-│   │   │       ├── rooms/                    # 룸 관리 API
-│   │   │       └── rppg/                     # FacePhys rPPG API
-│   │   ├── components/                       # React 컴포넌트
-│   │   │   ├── WebcamView.tsx
-│   │   │   ├── GazeCalibrationOverlay.tsx
-│   │   │   ├── GazeDashboard.tsx
-│   │   │   ├── MinuteHeartRateAverageBox.tsx
-│   │   │   └── ...
-│   │   ├── hooks/                            # Custom React hooks
-│   │   │   ├── useConcentrationData.ts
-│   │   │   ├── useRollingGazeAverage.ts
-│   │   │   ├── useRollingHeartRateAverage.ts
-│   │   │   ├── useRPPG.ts
-│   │   │   └── ...
-│   │   ├── lib/
-│   │   │   ├── auth.ts                       # 인증 로직
-│   │   │   ├── db.ts                         # 데이터베이스 연결
-│   │   │   ├── redisStream.ts                # Redis 스트림 클라이언트
-│   │   │   └── facephys/                     # FacePhys 유틸리티
-│   │   │       ├── core.ts
-│   │   │       ├── state.ts
-│   │   │       ├── rppg.ts
-│   │   │       └── server.ts
+│   │   ├── app/                 # App Router 페이지 + API Routes
+│   │   │   ├── api/             # auth · rppg · rooms · tracking · ranking · heartrate · pair · health
+│   │   │   ├── dashboard/  room/  tracker/  result/
+│   │   │   └── page.tsx
+│   │   ├── components/          # WebcamView, GazeDashboard, 캘리브레이션 등
+│   │   ├── hooks/               # useRPPG, useRollingHeartRateAverage, useConcentrationData …
+│   │   ├── lib/                 # auth, db(Drizzle), redisStream, facephys/*
 │   │   └── types/
-│   ├── facephys/
-│   │   └── weights/
-│   │       └── model.onnx                    # FacePhys ONNX 모델
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
+│   ├── facephys/weights/        # FacePhys ONNX 모델 가중치
+│   ├── drizzle.config.ts        # Drizzle 마이그레이션 설정
+│   └── Dockerfile               # ARM64 이미지
 │
-├── ml-service/                 # Python 머신러닝 분석 서비스
+├── ml-service/                  # Python FastAPI 집중도 분석 — EC2(docker compose) 배포
 │   ├── src/
-│   │   ├── main.py                           # FastAPI 서버
-│   │   ├── inference.py                      # 추론 엔진
-│   │   ├── model.py                          # 모델 정의
-│   │   ├── preprocessing.py                  # 데이터 전처리
-│   │   ├── params.py                         # 설정
-│   │   └── monitoring.py                     # 모니터링
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── docker-compose.yml
+│   │   ├── main.py              # FastAPI 진입점 (/analyze, /health)
+│   │   ├── inference.py         # 세션 분석 로직
+│   │   ├── preprocessing.py     # 분 단위 피처 가공
+│   │   ├── model.py / params.py # 집중도 모델 · 설정
+│   │   └── llm_feedback.py      # Bedrock(Claude) 피드백 생성
+│   ├── docker-compose.yml       # ml-service + redis
+│   └── Dockerfile
 │
-├── terraform/                  # AWS 인프라 코드
-│   ├── bootstrap/              # Terraform 상태 저장소 생성
-│   │   └── main.tf
-│   └── environments/
-│       └── dev/                # 개발 환경 설정
-│           ├── 00_outputs.tf
-│           ├── 01_versions.tf
-│           ├── 02_provider.tf
-│           ├── 03_variables.tf
-│           ├── 04_vpc.tf
-│           ├── 05_subnet.tf
-│           ├── 06_sg.tf
-│           ├── 07_routeTable.tf
-│           ├── 08_nacl.tf
-│           ├── 09_ec2.tf
-│           ├── 10_ecr.tf
-│           ├── 11_iam.tf
-│           ├── 12_nat.tf
-│           ├── 13_ecs.tf
-│           ├── 14_codedeploy.tf
-│           ├── 15_tg.tf
-│           ├── 16_alb.tf
-│           ├── 17_route53.tf
-│           ├── 18_acm.tf
-│           ├── 20_vpc_endpoint.tf
-│           ├── 21_logging.tf
-│           ├── 22_alarm.tf
-│           └── 23_log_export.tf
+├── terraform/                   # AWS 인프라 (IaC) — 상세: terraform/README.md
+│   ├── bootstrap/               # 원격 상태용 S3 + DynamoDB
+│   └── environments/dev/        # 00_outputs ~ 26_postgres_rds (+ Datadog)
 │
-├── scripts/
-│   └── monitoring.sh            # 모니터링 스크립트
-│
-├── appspec.yaml                 # AWS CodeDeploy 설정
-├── Dockerfile
-├── docker-compose.yml
+├── .github/workflows/           # backend.yml · ml-service.yml · terraform.yml
+├── scripts/                     # checkov.sh(IaC 보안 스캔) · monitoring.sh
+├── appspec.yaml                 # CodeDeploy(ECS) 정의
 └── README.md
 ```
 
-## 시작하기
+---
+
+## 💻 로컬 개발 환경
 
 ### 필수 요구사항
 
-- Node.js 20 이상
-- Python 3.10 이상
+- Node.js 20+
+- Python 3.10+
 - Docker & Docker Compose
-- AWS 계정 (배포 시)
-- PostgreSQL 13 이상
-- Redis 6 이상
+- 로컬 또는 원격 PostgreSQL 13+ / Redis 6+
 
-### 로컬 개발 환경 설정
-
-#### 1. 저장소 클론
+### 1) 저장소 클론
 
 ```bash
 git clone https://github.com/ICE-6141/focus-tracking-platform.git
 cd focus-tracking-platform
 ```
 
-#### 2. Backend 설정
+### 2) 백엔드(Next.js) 실행
 
 ```bash
 cd backend
-npm install
-npm run dev
+npm install            # onnxruntime-node 네이티브 의존성 때문에 ci/install 권장
+cp .env.example .env.local   # 값 채우기 (아래 환경 변수 참고)
+npm run db:migrate     # Drizzle 마이그레이션 (DATABASE_URL 필요)
+npm run dev            # http://localhost:3000
 ```
 
-백엔드는 `http://localhost:3000`에서 실행됩니다.
-
-**주의사항:**
-- `onnxruntime-node`는 native 의존성을 가지므로, 처음 설치 시 `npm install` (또는 `npm ci`)을 사용하세요
-- Node.js 20 이상 권장 (ONNX Runtime 호환성)
-
-#### 3. ML Service 설정
+### 3) ML 서비스 실행
 
 ```bash
 cd ml-service
-pip install -r requirements.txt
-uvicorn src.main:app --reload
+docker compose up -d   # FastAPI(:8000) + Redis(:6379) 동시 기동
+# 또는 직접:
+# pip install -r requirements.txt && uvicorn src.main:app --reload
 ```
 
-ML 서비스는 `http://localhost:8000`에서 실행됩니다.
-
-#### 4. 환경 변수 설정
-
-Backend 루트에 `.env.local` 파일 생성:
-
-```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/focus_tracking
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# Authentication
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your-secret-key-here
-
-# ML Service
-ML_SERVICE_URL=http://localhost:8000
-```
-
-### 빌드 및 배포
-
-#### Docker Compose로 로컬 실행
-
-```bash
-docker-compose up -d
-```
-
-#### 운영 환경 배포 (AWS)
-
-```bash
-cd terraform/environments/dev
-terraform init
-terraform plan
-terraform apply
-```
-
-## API 문서
-
-### 인증 API
-
-#### 로그인
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "password"
-}
-```
-
-#### 현재 사용자 정보
-
-```http
-GET /api/auth/me
-Authorization: Bearer {token}
-```
-
-### 시선 추적 API
-
-#### rPPG 세션 생성
-
-```http
-POST /api/rppg/session
-Content-Type: application/json
-
-{
-  "fps": 15
-}
-```
-
-**응답:**
-
-```json
-{
-  "sessionId": "session-uuid-123",
-  "fps": 15
-}
-```
-
-#### Frame 추론 및 BPM 계산
-
-```http
-POST /api/rppg/frame
-Content-Type: application/json
-
-{
-  "sessionId": "session-uuid-123",
-  "frame": [0.0, 0.1, 0.2, ...],
-  "dims": [36, 36, 3],
-  "timestampMs": 1710000000000,
-  "fps": 15
-}
-```
-
-**응답:**
-
-```json
-{
-  "bpm": 72.5,
-  "bpmReady": true,
-  "waveform": [0.1, 0.15, 0.2, ...],
-  "signal": 0.05
-}
-```
-
-### 심박수 분석 API
-
-#### 심박수 스트리밍
-
-```http
-POST /api/heartrate
-WebSocket upgrade
-
-{
-  "userId": "user-123",
-  "sessionId": "session-123"
-}
-```
-
-### 룸 관리 API
-
-#### 룸 생성
-
-```http
-POST /api/rooms/create
-Content-Type: application/json
-
-{
-  "name": "Study Room",
-  "maxParticipants": 5
-}
-```
-
-#### 현재 룸 조회
-
-```http
-GET /api/rooms/current
-Authorization: Bearer {token}
-```
-
-### ML 분석 API
-
-#### 집중도 분석 실행
-
-```http
-POST /api/analyze
-Content-Type: application/json
-
-{
-  "userId": "user-123",
-  "studySessionId": "session-123",
-  "streamKey": "tracking:session-123"
-}
-```
-
-## 아키텍처
-
-## Architecture Diagram
-
-```mermaid
-graph TD
-    User["사용자"] --> CF["CloudFront"]
-    CF --> S3FE["S3 (정적 프론트엔드)"]
-    User --> IGW["Internet Gateway"]
-
-    subgraph "AWS Cloud (VPC)"
-        IGW --> ALB["Application Load Balancer"]
-
-        subgraph "Public Subnet (Multi-AZ)"
-            ALB
-            NAT["NAT Gateway"]
-        end
-
-        subgraph "Private App Subnet (Multi-AZ)"
-            EC2APP["EC2 App Server (Docker Container)"]
-            KDS["Kinesis Data Streams"]
-            KDA["Kinesis Data Analytics"]
-        end
-
-        subgraph "Private DB Subnet (Multi-AZ)"
-            EC2DB["EC2 DB Server"]
-        end
-
-        ALB --> EC2APP
-        EC2APP --> EC2DB
-        EC2APP --> NAT
-
-        KDS --> KDA
-        KDA --> S3DATA["S3 (Raw / Processed Data)"]
-        EC2APP --> KDS
-    end
-
-    NAT --> API1["아이폰 앱 API"]
-    NAT --> API2["애플워치 앱 API"]
-    NAT --> API3["웹캠 API"]
-
-    GitHub["GitHub Actions"] --> ECR["AWS ECR"]
-    ECR --> EC2APP
-
-    Dev["Developer / CI-CD"] --> TF["Terraform"]
-    TF --> S3STATE["S3 (Terraform State)"]
-    TF --> DDBLOCK["DynamoDB (State Lock)"]
-    TF --> AWSRES["AWS Infrastructure Provisioning"]
-
-    AWSRES --> ALB
-    AWSRES --> EC2APP
-    AWSRES --> EC2DB
-    AWSRES --> NAT
-    AWSRES --> S3FE
-    AWSRES --> CF
-    AWSRES --> KDS
-    AWSRES --> KDA
-    AWSRES --> S3DATA
-```
-
-## FacePhys rPPG 통합
-
-이 플랫폼은 FacePhys ONNX 모델을 사용한 원격 광용적 신호(rPPG, Remote Photoplethysmography) 분석을 통해 웹캠에서 실시간 심박수를 측정합니다.
-
-### FacePhys 모델 통합 구조
-
-```text
-backend/
-  facephys/weights/
-    model.onnx        # FacePhys ONNX 모델 (36x36 RGB frame 입력)
-    state.gz          # Recurrent state 초기값
-  src/lib/facephys/   # FacePhys 서버 유틸리티
-    ├── core.ts       # ONNX 추론 엔진
-    ├── state.ts      # 상태 관리
-    ├── io.ts         # I/O 유틸
-    ├── rppg.ts       # rPPG 신호 처리
-    └── server.ts     # 서버 통합
-  src/app/api/rppg/
-    ├── session/route.ts  # 세션 생성/삭제
-    └── frame/route.ts    # Frame 추론 및 BPM 계산
-  src/hooks/useRPPG.ts      # 웹캠 frame → backend API 전송
-```
-
-### BPM 계산 흐름
-
-1. 웹캠에서 36×36 RGB frame 캡처 (15-30 FPS)
-2. 프레임을 backend API로 전송
-3. ONNX 모델이 rPPG 신호 추출 (약 6초 분량 필요)
-4. BPM 계산 및 실시간 전송
-5. 클라이언트에서 시각화 및 집중도 계산
-
-### 기술 사양
-
-- **모델**: FacePhys ONNX (onnxruntime-node v1.18+)
-- **입력**: 36×36×3 RGB frame
-- **출력**: BPM (beats per minute), rPPG 신호, 신호 강도
-- **필요 샘플**: 최소 6초 (90 frame @ 15fps)
-- **지연시간**: < 50ms per frame (CPU)
-
-## 배포
-
-### 사전 요구사항
-
-- AWS 계정 및 CLI 설정
-- Terraform 1.0 이상
-- Docker Hub 계정 (이미지 푸시용)
-
-### AWS 배포 (Terraform)
-
-#### 1. 상태 저장소 초기화
-
-```bash
-cd terraform/bootstrap
-terraform init
-terraform apply
-```
-
-이 단계에서 S3 버킷과 DynamoDB 테이블이 생성되어 Terraform 상태를 저장합니다.
-
-#### 2. 개발 환경 배포
-
-```bash
-cd ../environments/dev
-
-# 변수 설정
-export AWS_REGION=us-east-1
-export TF_VAR_environment=dev
-export TF_VAR_app_name=focus-tracking
-
-# 배포
-terraform init
-terraform plan
-terraform apply
-```
-
-#### 3. 환경 설정
-
-배포 후 다음을 설정하세요:
-
-```bash
-# EC2 인스턴스에 환경 변수 설정
-AWS_PROFILE=default aws ssm put-parameter \
-  --name /focus-tracking/dev/database-url \
-  --value "postgresql://..." \
-  --type SecureString
-
-# 애플리케이션 재배포
-aws ecs update-service \
-  --cluster focus-tracking-dev \
-  --service app \
-  --force-new-deployment
-```
-
-### Docker 배포
-
-#### 로컬 테스트
-
-```bash
-docker-compose up -d
-```
-
-#### ECR에 이미지 푸시
-
-```bash
-# ECR 로그인
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
-
-# 이미지 빌드 및 푸시
-docker build -t focus-tracking-backend:latest backend/
-docker tag focus-tracking-backend:latest \
-  123456789.dkr.ecr.us-east-1.amazonaws.com/focus-tracking:latest
-docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/focus-tracking:latest
-```
-
-### CI/CD 파이프라인 (GitHub Actions)
-
-GitHub Actions를 통해 자동 배포가 구성되어 있습니다:
-
-1. **Push to main** → 이미지 빌드 및 ECR 푸시
-2. **ECR 푸시 완료** → CodeDeploy 트리거
-3. **CodeDeploy** → ECS 서비스 업데이트
-
-## 모니터링 및 로깅
-
-### CloudWatch 대시보드
-
-```bash
-# 로그 확인
-aws logs tail /ecs/focus-tracking-app --follow
-
-# 메트릭 확인
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ECS \
-  --metric-name CPUUtilization \
-  --statistics Average \
-  --start-time 2024-01-01T00:00:00Z \
-  --end-time 2024-01-02T00:00:00Z \
-  --period 300
-```
-
-### 수동 모니터링
-
-```bash
-./scripts/monitoring.sh
-```
-
-## 개발 가이드
-
-### 프로젝트 규칙
-
-- **코드 스타일**: ESLint + Prettier 설정 준수
-- **테스트**: 주요 기능에 대한 단위 테스트 작성
-- **커밋 메시지**: Conventional Commits 사용
-- **PR 리뷰**: 최소 1명의 승인 필요
-
-### 새 기능 추가
-
-1. Feature 브랜치 생성: `git checkout -b feature/feature-name`
-2. 코드 작성 및 테스트
-3. Pull Request 생성
-4. 코드 리뷰 및 승인
-5. Main 브랜치로 병합
-
-### 버그 수정
-
-1. Issue 확인 또는 생성
-2. Bug fix 브랜치 생성: `git checkout -b fix/issue-name`
-3. 수정 및 테스트
-4. Pull Request 생성 (Issue 링크)
-5. 병합
-
-## 성능 최적화
-
-### Frontend 최적화
-
-- **이미지 최적화**: Next.js Image 컴포넌트 사용
-- **코드 스플리팅**: 동적 import 활용
-- **캐싱**: Service Worker 및 HTTP 캐싱
-- **웹캠 프레임 레이트**: 15-30 FPS로 조정
-
-### Backend 최적화
-
-- **데이터베이스 인덱싱**: 주요 쿼리 최적화
-- **Redis 캐싱**: 세션 및 자주 조회되는 데이터
-- **ONNX 모델 양자화**: 추론 성능 향상
-- **병렬 처리**: Kinesis 스트림 활용
-
-## 문제 해결
-
-### 웹캠 권한 오류
-
-```
-NotAllowedError: Permission denied by system
-```
-
-**해결책:**
-- 브라우저 설정에서 카메라 권한 확인
-- HTTPS 연결 확인 (로컬: localhost 제외)
-
-### ONNX Runtime 오류
-
-```
-Error: Could not find onnxruntime native modules
-```
-
-**해결책:**
-```bash
-cd backend
-rm -rf node_modules package-lock.json
-npm install
-npm run build
-```
-
-### 심박수 측정 실패
-
-- 밝은 조명 환경 확인
-- 얼굴이 카메라 중앙에 위치하는지 확인
-- 최소 6초 이상의 데이터 수집 필요
-
-## 기여
-
-이 프로젝트에 기여하고 싶으신가요? 다음 단계를 따르세요:
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
+> ML 서비스의 `/analyze`는 Redis에 쌓인 세션 데이터를 읽어 분석합니다.
+> 백엔드와 ML 서비스가 **같은 Redis** 를 보도록 `REDIS_HOST`/`REDIS_PORT`를 맞춰주세요.
 
 ---
 
-**개발팀**: ICE-6141  
-**마지막 업데이트**: 2026년 5월
+## 🔑 환경 변수
+
+### 백엔드 (`backend/.env.local`)
+
+```bash
+# Google OAuth
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=
+AUTH_SECRET=
+APP_URL=http://localhost:3000
+
+# PostgreSQL (Drizzle & 앱 공용) — 예: postgres://user:pass@host:5432/db?sslmode=require
+DATABASE_URL=
+DATABASE_POOL_MAX=10
+DATABASE_POOL_IDLE_MS=30000
+
+# Redis (실시간 추적 스트림)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_STREAM_MAXLEN=10800
+
+# ML 서비스
+ML_SERVICE_URL=http://localhost:8000
+```
+
+> 운영 환경에서는 `DB_PASSWORD`를 **Secrets Manager**(RDS 관리형 시크릿)에서 주입하며,
+> 나머지 시크릿은 GitHub Actions Secrets → ECS Task Definition으로 전달됩니다.
+
+### ML 서비스 (Bedrock)
+
+| 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `REDIS_HOST` / `REDIS_PORT` | `redis` / `6379` | 세션 데이터 소스 |
+| `BEDROCK_REGION` | `ap-northeast-2` | Bedrock 리전 |
+| `BEDROCK_MODEL_ID` | `global.anthropic.claude-sonnet-4-5-...` | 피드백 생성 모델 |
+| `BEDROCK_MAX_OUTPUT_TOKENS` / `BEDROCK_TEMPERATURE` | `700` / `0.2` | 출력 제어 |
+
+---
+
+## 🔌 API 개요
+
+### 백엔드 (Next.js API Routes, `/api/*`)
+
+| 그룹 | 엔드포인트 | 역할 |
+| --- | --- | --- |
+| 인증 | `auth/login`, `auth/callback`, `auth/logout`, `auth/me` | Google OAuth 로그인/세션 |
+| 사용자 | `me/settings` | 사용자 설정 |
+| rPPG | `rppg/session`, `rppg/frame`, `rppg/health` | 웹캠 프레임 → FacePhys 추론 → BPM |
+| 심박수 | `heartrate` | 심박수 스트리밍 |
+| 추적 | `tracking/sessions`, `tracking/stream`, `tracking/jobs[/:id]` | 학습 세션·스트림·분석 잡 |
+| 룸 | `rooms/match`, `rooms/invite`, `rooms/signal`, `rooms/events`, `rooms/heartbeat`, `rooms/leave` | 실시간 룸/WebRTC 시그널링 |
+| 페어링 | `pair/generate`, `pair/status`, `pair/current` | 기기 페어링 |
+| 랭킹 | `ranking`, `ranking/me` | 집중 랭킹 |
+| 헬스 | `health` | ALB 헬스체크 (`/api/health`) |
+
+### ML 서비스 (FastAPI)
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| `GET` | `/health` | 헬스체크 |
+| `POST` | `/analyze` | 세션 분 단위 집중도 분석 + (옵션) Bedrock 피드백 |
+| `DELETE` | `/sessions/{user_id}/{session_id}/records` | Redis 세션 기록 삭제 |
+
+---
+
+## 🫀 FacePhys rPPG 심박수 측정
+
+웹캠 영상에서 원격 광용적맥파(rPPG, Remote Photoplethysmography)를 추출해 **하드웨어 없이 심박수**를 추정합니다.
+
+- **모델**: FacePhys ONNX (`backend/facephys/weights/`), `onnxruntime-node`로 **서버 사이드** 추론
+- **입력**: 36×36×3 RGB 프레임 (15–30 FPS)
+- **출력**: BPM, rPPG 파형, 신호 강도
+- **흐름**: 브라우저 프레임 캡처 → `POST /api/rppg/frame` → ONNX 추론 → BPM → 실시간 시각화
+
+---
+
+## ☁️ 배포 & CI/CD
+
+GitHub Actions(모두 **OIDC 인증**, 정적 키 미사용, `ap-northeast-2`)에서 경로 기반으로 트리거됩니다.
+
+```mermaid
+flowchart LR
+    push["git push → main"]
+
+    subgraph be["backend/** 변경"]
+        b1["ARM64 빌드"] --> b2["ECR push"] --> b3["Task Def 렌더"] --> b4["CodeDeploy<br/>Blue/Green → Fargate"]
+    end
+    subgraph mls["ml-service/** 변경"]
+        m1["ARM64 빌드"] --> m2["ECR push"] --> m3["SSM RunCommand<br/>→ EC2 docker compose"]
+    end
+    subgraph tf["terraform/** 변경"]
+        t1["fmt → init"] --> t2["plan"] --> t3["apply (main)"]
+    end
+
+    push --> be
+    push --> mls
+    push --> tf
+```
+
+| 워크플로 | 트리거 경로 | 동작 |
+| --- | --- | --- |
+| `backend.yml` | `backend/**`, `appspec.yaml` | ARM64 이미지 빌드 → ECR → ECS Task Definition 렌더 → **CodeDeploy Blue/Green** 배포 |
+| `ml-service.yml` | `ml-service/**` | ARM64 이미지 빌드 → ECR → **SSM Run Command** 로 ML EC2에서 `docker compose up` |
+| `terraform.yml` | `terraform/environments/dev/**` | `fmt -check` → `init` → `plan` → `apply`(main) |
+
+> 배포 전략·롤백·인프라 적용 절차는 **[`terraform/README.md`](terraform/README.md)** 에 자세히 정리되어 있습니다.
+
+---
+
+## 📈 모니터링
+
+- **CloudWatch Alarms → SNS(이메일)**: ALB 5xx 급증, ECS 실행 Task 부족, ECS CPU 80%↑, ALB 응답시간 2초↑
+- **로그**: ECS 앱 로그(CloudWatch) → Firehose → S3 장기 보관(GZIP, 날짜 파티션), VPC Flow Logs(REJECT), RDS 로그
+- **Datadog**: AWS 통합(메트릭·트레이스·로그 포워딩, CSPM)
+- **ALB Access Logs**: S3 보관(라이프사이클: 30일 후 Glacier IR, 90일 만료)
+
+```bash
+# ECS 앱 로그 실시간 확인
+aws logs tail /ecs/focus-tracking-platform-dev --follow --region ap-northeast-2
+```
+
+---
+
+## 🤝 기여
+
+1. Feature 브랜치 생성: `git checkout -b feature/foo` (버그는 `fix/foo`)
+2. 변경 + 테스트, **Conventional Commits** 사용
+3. Pull Request 생성 → 리뷰 → `main` 병합 (경로별 워크플로가 자동 배포)
+
+## 📄 라이선스
+
+[MIT](LICENSE) 라이선스 하에 배포됩니다.
+
+---
+
+**팀**: ICE-6141 · **리전**: AWS `ap-northeast-2` (Seoul) · **마지막 업데이트**: 2026년 6월
