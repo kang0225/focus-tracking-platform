@@ -200,6 +200,28 @@ resource "aws_network_acl_rule" "private_app_out_to_public_c_ephemeral" {
   to_port        = 65535
 }
 
+resource "aws_network_acl_rule" "private_app_out_ml_api" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 160
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_a_cidr # ML EC2가 있는 서브넷만
+  from_port      = var.ml_port                   # 8000
+  to_port        = var.ml_port
+}
+
+resource "aws_network_acl_rule" "private_app_out_redis" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 165
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_a_cidr
+  from_port      = 6379
+  to_port        = 6379
+}
+
 resource "aws_network_acl_rule" "private_app_out_http" {
   network_acl_id = aws_network_acl.private_app.id
   rule_number    = 120
@@ -242,6 +264,17 @@ resource "aws_network_acl_rule" "private_app_out_db_c" {
   cidr_block     = var.private_db_subnet_c_cidr
   from_port      = var.db_port
   to_port        = var.db_port
+}
+
+resource "aws_network_acl_rule" "private_app_out_to_app_c_ephemeral" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 170
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_c_cidr # task가 있을 수 있는 반대편 AZ
+  from_port      = 1024
+  to_port        = 65535
 }
 
 ############################
