@@ -39,7 +39,7 @@ export async function snapshotRoom(input: RoomWithMembers): Promise<RoomSnapshot
       const presence = await redis.getPresence(room.id, p.userId);
       const metrics = await redis.getLiveMetrics(p.userId);
       return {
-        id: p.userId,
+        id: presence?.clientId ?? p.userId,
         name: presence?.displayName ?? p.displayName,
         joinedAt: p.joinedAt.getTime(),
         lastSeenAt: presence?.lastSeenAt ?? p.lastSeenAt.getTime(),
@@ -72,19 +72,27 @@ export async function snapshotRoom(input: RoomWithMembers): Promise<RoomSnapshot
 }
 
 /**
- * Redis stream entry id ("1700000000000-0") → 정수 sequence 변환.
- * 기존 클라이언트가 number 형 sequence 를 기대하므로 ms 부분만 사용.
+ * Redis stream entry id ("1700000000000-1") → 정수 sequence 변환.
+ * 기존 클라이언트가 number 형 sequence 를 기대하므로 숫자를 유지하되,
+ * 같은 ms 에 들어온 WebRTC ICE candidate 를 구분할 수 있게 seq 부분도 보존한다.
  */
 export function streamIdToSequence(streamId: string): number {
-  const [ms] = streamId.split('-');
-  const n = Number(ms);
-  return Number.isFinite(n) ? n : 0;
+  const [ms, seq = '0'] = streamId.split('-');
+  const msNumber = Number(ms);
+  const seqNumber = Number(seq);
+  if (!Number.isFinite(msNumber) || !Number.isFinite(seqNumber)) return 0;
+  return msNumber * 1000 + Math.min(seqNumber, 999);
 }
 
 export function sequenceToStreamId(seq: number): string | null {
   if (!seq || seq <= 0) return null;
-  // XRANGE 의 exclusive after 를 위해 그대로 ms 만 사용.
-  return `${seq}-0`;
+  if (seq < 100_000_000_000_000) {
+    // 이전 ms-only cursor 와의 호환.
+    return `${seq}-0`;
+  }
+  const ms = Math.floor(seq / 1000);
+  const streamSeq = seq % 1000;
+  return `${ms}-${streamSeq}`;
 }
 
 export function mapSignal(entry: SignalReadResult): SignalMessage {

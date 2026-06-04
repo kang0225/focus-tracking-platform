@@ -488,7 +488,6 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
     return () => {
       window.removeEventListener('pagehide', leaveWithKeepalive);
       window.removeEventListener('beforeunload', leaveWithKeepalive);
-      leaveWithKeepalive();
 
       for (const pc of peerConnections.current.values()) pc.close();
       peerConnections.current.clear();

@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     // Redis: presence 갱신
     const displayName = body.name ?? session.user.name ?? '사용자';
     await redis.setPresence(body.roomId, session.user.id, {
+      clientId: body.clientId ?? session.user.id,
       displayName,
       audioEnabled: body.media?.audioEnabled ?? true,
       videoEnabled: body.media?.videoEnabled ?? true,
