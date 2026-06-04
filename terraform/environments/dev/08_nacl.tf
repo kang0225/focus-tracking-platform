@@ -317,6 +317,40 @@ resource "aws_network_acl_rule" "private_db_out_to_app_c_ephemeral" {
   to_port        = 65535
 }
 
+# ── app(task) → ML(app_a 고정): 요청은 포트 핀포인트로만 ──
+resource "aws_network_acl_rule" "private_app_out_ml_api" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 160
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_a_cidr # ML EC2가 있는 서브넷만
+  from_port      = var.ml_port                   # 8000
+  to_port        = var.ml_port
+}
+
+resource "aws_network_acl_rule" "private_app_out_redis" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 165
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_a_cidr
+  from_port      = 6379
+  to_port        = 6379
+}
+
+# ── ML(app_a) → task(app_c) 응답: NACL은 stateless라 ephemeral 필요 ──
+resource "aws_network_acl_rule" "private_app_out_to_app_c_ephemeral" {
+  network_acl_id = aws_network_acl.private_app.id
+  rule_number    = 170
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.private_app_subnet_c_cidr # task가 있을 수 있는 반대편 AZ
+  from_port      = 1024
+  to_port        = 65535
+}
 #######################
 ### NACL과 서브넷 연결 ###
 #######################
