@@ -20,9 +20,8 @@ export type RoomJoinMode =
   | { type: 'invite-join'; inviteCode: string };
 
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-
-const rtcConfig: RTCConfiguration = {
-  iceServers: getIceServers(),
+const DEFAULT_RTC_CONFIG: RTCConfiguration = {
+  iceServers: DEFAULT_ICE_SERVERS,
   iceCandidatePoolSize: 4,
 };
 
@@ -36,21 +35,27 @@ const makeClientId = () => {
   return Math.random().toString(36).slice(2);
 };
 
-function getIceServers(): RTCIceServer[] {
-  const configured = process.env.NEXT_PUBLIC_RTC_ICE_SERVERS;
-  if (!configured) return DEFAULT_ICE_SERVERS;
+function isValidIceServer(server: unknown): server is RTCIceServer {
+  if (!server || typeof server !== 'object') return false;
+  const urls = (server as RTCIceServer).urls;
+  return typeof urls === 'string' || Array.isArray(urls);
+}
 
-  try {
-    const parsed = JSON.parse(configured) as RTCIceServer | RTCIceServer[];
-    const servers = Array.isArray(parsed) ? parsed : [parsed];
-    const validServers = servers.filter((server) => {
-      if (!server || typeof server !== 'object') return false;
-      return typeof server.urls === 'string' || Array.isArray(server.urls);
-    });
-    return validServers.length > 0 ? validServers : DEFAULT_ICE_SERVERS;
-  } catch {
-    return DEFAULT_ICE_SERVERS;
-  }
+function normalizeRtcConfig(value: unknown): RTCConfiguration {
+  if (!value || typeof value !== 'object') return DEFAULT_RTC_CONFIG;
+
+  const payload = value as Partial<RTCConfiguration>;
+  const iceServers = Array.isArray(payload.iceServers)
+    ? payload.iceServers.filter(isValidIceServer)
+    : [];
+
+  return {
+    ...DEFAULT_RTC_CONFIG,
+    iceServers: iceServers.length > 0 ? iceServers : DEFAULT_ICE_SERVERS,
+    iceCandidatePoolSize: typeof payload.iceCandidatePoolSize === 'number'
+      ? payload.iceCandidatePoolSize
+      : DEFAULT_RTC_CONFIG.iceCandidatePoolSize,
+  };
 }
 
 const getMediaErrorMessage = (error: unknown) => {
@@ -116,6 +121,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
   const metricsRef = useRef(metrics);
   const mediaRef = useRef({ audioEnabled: true, videoEnabled: true });
   const localStreamRef = useRef<MediaStream | null>(null);
+  const rtcConfigRef = useRef<RTCConfiguration>(DEFAULT_RTC_CONFIG);
   const peerConnections = useRef(new Map<string, RTCPeerConnection>());
   const lastSignalIdRef = useRef(0);
   const handledSignalsRef = useRef(new Set<number>());
@@ -171,6 +177,16 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
     [clientId],
   );
 
+  const loadRtcConfig = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rtc/config', { cache: 'no-store' });
+      if (!res.ok) return;
+      rtcConfigRef.current = normalizeRtcConfig(await res.json());
+    } catch {
+      rtcConfigRef.current = DEFAULT_RTC_CONFIG;
+    }
+  }, []);
+
   const removePeer = useCallback((participantId: string) => {
     peerConnections.current.get(participantId)?.close();
     peerConnections.current.delete(participantId);
@@ -194,7 +210,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
       const existing = peerConnections.current.get(participantId);
       if (existing) return existing;
 
-      const pc = new RTCPeerConnection(rtcConfig);
+      const pc = new RTCPeerConnection(rtcConfigRef.current);
       const stream = localStreamRef.current;
 
       stream?.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -346,6 +362,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
           track.enabled = true;
         });
         setLocalStream(stream);
+        await loadRtcConfig();
 
         const fallbackError = getJoinFailureMessage(joinMode);
         const requestBody = {
@@ -389,7 +406,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
     return () => {
       cancelled = true;
     };
-  }, [clientId, joinMode]);
+  }, [clientId, joinMode, loadRtcConfig]);
 
   const toggleAudio = useCallback(() => {
     setIsAudioEnabled((current) => {

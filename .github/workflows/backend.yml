@@ -82,6 +82,7 @@ jobs:
             REDIS_HOST=${{ secrets.REDIS_HOST }}
             REDIS_PORT=${{ secrets.REDIS_PORT }}
             ML_SERVICE_URL=${{ secrets.ML_SERVICE_URL }}
+            RTC_ICE_SERVERS=${{ secrets.RTC_ICE_SERVERS }}
             RUN_MIGRATIONS=true
 
       - name: Deploy to ECS (CodeDeploy Blue/Green)
