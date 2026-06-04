@@ -30,6 +30,7 @@ export async function POST(request: Request) {
 
     // Redis presence 갱신 (라이브 표시 + heartbeat 용)
     await redis.setPresence(result.room.id, session.user.id, {
+      clientId: body.clientId ?? session.user.id,
       displayName,
       audioEnabled: body.media?.audioEnabled ?? true,
       videoEnabled: body.media?.videoEnabled ?? true,

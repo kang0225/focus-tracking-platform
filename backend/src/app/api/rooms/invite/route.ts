@@ -27,9 +27,11 @@ export async function POST(request: Request) {
     const displayName = body.name ?? session.user.name ?? '사용자';
     const audioEnabled = body.media?.audioEnabled ?? true;
     const videoEnabled = body.media?.videoEnabled ?? true;
+    const clientId = body.clientId ?? session.user.id;
 
     const touchPresence = async (roomId: string) => {
       await redis.setPresence(roomId, session.user.id, {
+        clientId,
         displayName,
         audioEnabled,
         videoEnabled,

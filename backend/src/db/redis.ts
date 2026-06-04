@@ -22,6 +22,7 @@ const watchMetricsKey = (userId: string) => `metrics:watch:user:${userId}`;
 const signalsKey = (roomId: string) => `signals:room:${roomId}`;
 
 export interface PresencePayload {
+  clientId: string;
   displayName: string;
   audioEnabled: boolean;
   videoEnabled: boolean;
@@ -37,6 +38,8 @@ export async function setPresence(
   await sendRedisCommand([
     'HSET',
     key,
+    'clientId',
+    payload.clientId,
     'displayName',
     payload.displayName,
     'audioEnabled',
@@ -69,6 +72,7 @@ export async function getPresence(
     map.set(String(reply[i]), String(reply[i + 1]));
   }
   return {
+    clientId: map.get('clientId') ?? userId,
     displayName: map.get('displayName') ?? '',
     audioEnabled: map.get('audioEnabled') === 'true',
     videoEnabled: map.get('videoEnabled') === 'true',
