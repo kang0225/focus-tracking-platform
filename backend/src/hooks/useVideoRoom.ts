@@ -19,8 +19,11 @@ export type RoomJoinMode =
   | { type: 'invite-create' }
   | { type: 'invite-join'; inviteCode: string };
 
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+
 const rtcConfig: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  iceServers: getIceServers(),
+  iceCandidatePoolSize: 4,
 };
 
 const ROOM_MISSING_RESPONSE_LIMIT = 3;
@@ -32,6 +35,23 @@ const makeClientId = () => {
   }
   return Math.random().toString(36).slice(2);
 };
+
+function getIceServers(): RTCIceServer[] {
+  const configured = process.env.NEXT_PUBLIC_RTC_ICE_SERVERS;
+  if (!configured) return DEFAULT_ICE_SERVERS;
+
+  try {
+    const parsed = JSON.parse(configured) as RTCIceServer | RTCIceServer[];
+    const servers = Array.isArray(parsed) ? parsed : [parsed];
+    const validServers = servers.filter((server) => {
+      if (!server || typeof server !== 'object') return false;
+      return typeof server.urls === 'string' || Array.isArray(server.urls);
+    });
+    return validServers.length > 0 ? validServers : DEFAULT_ICE_SERVERS;
+  } catch {
+    return DEFAULT_ICE_SERVERS;
+  }
+}
 
 const getMediaErrorMessage = (error: unknown) => {
   if (!(error instanceof DOMException)) {
@@ -101,6 +121,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
   const handledSignalsRef = useRef(new Set<number>());
   const offeredPeersRef = useRef(new Set<string>());
   const missingRoomResponsesRef = useRef(0);
+  const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>());
 
   useEffect(() => {
     roomRef.current = room;
@@ -154,7 +175,18 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
     peerConnections.current.get(participantId)?.close();
     peerConnections.current.delete(participantId);
     offeredPeersRef.current.delete(participantId);
+    pendingIceCandidatesRef.current.delete(participantId);
     setRemoteVideos((videos) => videos.filter((video) => video.participantId !== participantId));
+  }, []);
+
+  const flushPendingIceCandidates = useCallback(async (participantId: string, pc: RTCPeerConnection) => {
+    const pending = pendingIceCandidatesRef.current.get(participantId);
+    if (!pending?.length) return;
+
+    pendingIceCandidatesRef.current.delete(participantId);
+    for (const candidate of pending) {
+      await pc.addIceCandidate(candidate).catch(() => undefined);
+    }
   }, []);
 
   const getPeerConnection = useCallback(
@@ -193,7 +225,11 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
           setStatus('P2P 연결에 실패했습니다. 네트워크 또는 TURN 설정을 확인해주세요.');
         }
 
-        if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (pc.connectionState === 'disconnected') {
+          setStatus('P2P 연결이 불안정합니다. 재연결을 기다리는 중입니다.');
+        }
+
+        if (['failed', 'closed'].includes(pc.connectionState)) {
           removePeer(participantId);
         }
       };
@@ -227,6 +263,7 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
 
       if (signal.type === 'offer') {
         await pc.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);
+        await flushPendingIceCandidates(signal.from, pc);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await sendSignal(signal.from, 'answer', answer);
@@ -236,15 +273,24 @@ export function useVideoRoom({ name, metrics, joinMode }: UseVideoRoomArgs) {
       if (signal.type === 'answer') {
         if (!pc.currentRemoteDescription) {
           await pc.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);
+          await flushPendingIceCandidates(signal.from, pc);
         }
         return;
       }
 
       if (signal.type === 'ice-candidate' && signal.payload) {
-        await pc.addIceCandidate(signal.payload as RTCIceCandidateInit);
+        const candidate = signal.payload as RTCIceCandidateInit;
+        if (pc.currentRemoteDescription) {
+          await pc.addIceCandidate(candidate).catch(() => undefined);
+          return;
+        }
+
+        const pending = pendingIceCandidatesRef.current.get(signal.from) ?? [];
+        pending.push(candidate);
+        pendingIceCandidatesRef.current.set(signal.from, pending);
       }
     },
-    [getPeerConnection, sendSignal],
+    [flushPendingIceCandidates, getPeerConnection, sendSignal],
   );
 
   const reconcilePeers = useCallback(

@@ -252,6 +252,10 @@ REDIS_STREAM_MAXLEN=10800
 
 # ML 서비스
 ML_SERVICE_URL=http://localhost:8000
+
+# WebRTC ICE 서버
+# 서로 다른 네트워크/NAT 환경의 화상 연결에는 TURN 서버를 함께 설정하세요.
+NEXT_PUBLIC_RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"user","credential":"pass"}]'
 ```
 
 > 운영 환경에서는 `DB_PASSWORD`를 **Secrets Manager**(RDS 관리형 시크릿)에서 주입하며,
