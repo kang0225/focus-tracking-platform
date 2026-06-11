@@ -1,7 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const CLICKS_PER_CALIBRATION_POINT = 3;
 const TOTAL_CALIBRATION_POINTS = 9;
+const GAZE_STALE_MS = 1500;
+
+function finiteCoordinate(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
 
 export function useWebGazer() {
   const [coordinates, setCoordinates] = useState({ x: 0, y: 0 });
@@ -10,6 +16,7 @@ export function useWebGazer() {
   const [currentCalibrationPointIndex, setCurrentCalibrationPointIndex] = useState(0);
   const [calibrationPointClickCount, setCalibrationPointClickCount] = useState(0);
   const [isCalibrationBusy, setIsCalibrationBusy] = useState(false);
+  const lastGazeAtRef = useRef(0);
 
   const initWebGazer = useCallback(() => {
     //webgazer 초기화 해서 시선 데이터 받아오기 시작
@@ -18,7 +25,17 @@ export function useWebGazer() {
 
     wg.saveDataAcrossSessions(false).applyKalmanFilter(true);
     wg.setGazeListener((data: any) => {
-      if (data) setCoordinates({ x: Math.floor(data.x), y: Math.floor(data.y) });
+      const x = finiteCoordinate(data?.x);
+      const y = finiteCoordinate(data?.y);
+
+      if (x == null || y == null) {
+        lastGazeAtRef.current = 0;
+        setCoordinates({ x: 0, y: 0 });
+        return;
+      }
+
+      lastGazeAtRef.current = Date.now();
+      setCoordinates({ x: Math.floor(x), y: Math.floor(y) });
     }).begin();
 
     wg.showVideoPreview(false).showPredictionPoints(false);
@@ -59,6 +76,7 @@ export function useWebGazer() {
       if (wg?.clearData) {
         await wg.clearData();
       }
+      lastGazeAtRef.current = 0;
       setCoordinates({ x: 0, y: 0 });
       setIsCalibrated(false);
       setCurrentCalibrationPointIndex(0);
@@ -67,6 +85,20 @@ export function useWebGazer() {
       setIsCalibrationBusy(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return undefined;
+
+    const interval = window.setInterval(() => {
+      const lastGazeAt = lastGazeAtRef.current;
+      if (lastGazeAt > 0 && Date.now() - lastGazeAt > GAZE_STALE_MS) {
+        lastGazeAtRef.current = 0;
+        setCoordinates({ x: 0, y: 0 });
+      }
+    }, 500);
+
+    return () => window.clearInterval(interval);
+  }, [isLoaded]);
 
   //컴포넌트 언마운트 시 웹게이저 정리
   useEffect(() => {

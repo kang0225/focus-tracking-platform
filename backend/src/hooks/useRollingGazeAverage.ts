@@ -32,14 +32,17 @@ export function useRollingGazeAverage(coordinates: Coordinates, enabled = true, 
 
     const sample = () => {
       const latest = latestCoordinatesRef.current;
-      if (!isValidCoordinate(latest)) return;
-
       const now = Date.now();
       const cutoff = now - windowSeconds * 1000;
-      setSamples((current) => [
-        ...current.filter((item) => item.timeMs >= cutoff),
-        { x: latest.x, y: latest.y, timeMs: now },
-      ]);
+      setSamples((current) => {
+        const freshSamples = current.filter((item) => item.timeMs >= cutoff);
+        if (!isValidCoordinate(latest)) return freshSamples;
+
+        return [
+          ...freshSamples,
+          { x: latest.x, y: latest.y, timeMs: now },
+        ];
+      });
     };
 
     sample();
