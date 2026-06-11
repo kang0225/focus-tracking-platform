@@ -74,6 +74,9 @@ terraform.rc
 # Deployment / hosting
 .vercel/
 
+# Datadog Static Analysis (로컬 설정, 커밋하지 않음)
+static-analysis.datadog.yml
+
 # Editor and OS files
 .DS_Store
 Thumbs.db
