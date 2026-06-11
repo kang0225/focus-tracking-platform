@@ -35,8 +35,8 @@ resource "aws_appautoscaling_scheduled_action" "ecs_scale_down_night" {
 
   # 19_autoscaling.tf 의 scalable target 을 그대로 가리킴 (대상 = ECS Service DesiredCount)
   service_namespace  = aws_appautoscaling_target.ecs_service.service_namespace # ecs를 관리하는 Auto Scaling
-  resource_id        = aws_appautoscaling_target.ecs_service.resource_id # "service/cluster-name/service-name"
-  scalable_dimension = aws_appautoscaling_target.ecs_service.scalable_dimension 
+  resource_id        = aws_appautoscaling_target.ecs_service.resource_id       # "service/cluster-name/service-name"
+  scalable_dimension = aws_appautoscaling_target.ecs_service.scalable_dimension
   # 우리는 "ecs:service:DesiredCount" 하나만 등록했으므로 그대로 참조 (반복 입력 방지)
 
   schedule = local.cron_stop         # 언제 실행할지 (밤 22:00 KST)
@@ -114,7 +114,7 @@ resource "aws_scheduler_schedule" "ml_ec2_stop_night" {
 
   # 정시 실행만 (지연 허용 안 함). 분산 실행이 필요하면 WINDOW 모드로 변경
   flexible_time_window {
-    mode = "OFF" 
+    mode = "OFF"
   }
 
   schedule_expression          = local.cron_stop         # 밤 22:00
@@ -138,7 +138,7 @@ resource "aws_scheduler_schedule" "ml_ec2_start_morning" {
   name = "${var.project_name}-${var.environment}-ml-ec2-start-morning"
 
   flexible_time_window {
-    mode = "OFF" 
+    mode = "OFF"
   }
 
   schedule_expression          = local.cron_start # 아침 09:00
