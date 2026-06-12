@@ -219,6 +219,7 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
       "application-autoscaling:Describe*", "application-autoscaling:ListTagsForResource",
       "application-autoscaling:RegisterScalableTarget", "application-autoscaling:DeregisterScalableTarget",
       "application-autoscaling:PutScalingPolicy", "application-autoscaling:DeleteScalingPolicy",
+      "application-autoscaling:PutScheduledAction", "application-autoscaling:DeleteScheduledAction",
       "application-autoscaling:TagResource", "application-autoscaling:UntagResource",
     ]
 
