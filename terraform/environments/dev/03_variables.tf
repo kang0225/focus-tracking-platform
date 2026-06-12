@@ -109,6 +109,18 @@ variable "datadog_aws_account_id" {
   default     = "058264452543"
 }
 
+variable "datadog_slack_account_name" {
+  description = "Datadog Slack integration에서 UI로 연결한 워크스페이스 이름"
+  type        = string
+  default     = "ICE6141"
+}
+
+variable "datadog_slack_channel" {
+  description = "알림을 받을 Slack 채널 (예: #focus-alerts)"
+  type        = string
+  default     = "#focus-alerts"
+}
+
 variable "postgres_db_name" {
   description = "Initial PostgreSQL database name."
   type        = string
