@@ -6,7 +6,7 @@
 resource "aws_security_group" "alb_sg" {
   name        = "${var.project_name}-${var.environment}-alb-sg"
   description = "Security group for FocusTracker ALB"
-  vpc_id      = aws_vpc.main_vpc.id
+  vpc_id      = module.network.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-alb-sg"
@@ -17,7 +17,7 @@ resource "aws_security_group" "alb_sg" {
 resource "aws_security_group" "web_sg" {
   name        = "${var.project_name}-${var.environment}-web-sg"
   description = "Security group for Web Interface EC2"
-  vpc_id      = aws_vpc.main_vpc.id
+  vpc_id      = module.network.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-web-sg"
@@ -28,7 +28,7 @@ resource "aws_security_group" "web_sg" {
 resource "aws_security_group" "db_sg" {
   name        = "${var.project_name}-${var.environment}-db-sg"
   description = "Security group for Data Processing EC2"
-  vpc_id      = aws_vpc.main_vpc.id
+  vpc_id      = module.network.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-db-sg"
@@ -39,7 +39,7 @@ resource "aws_security_group" "db_sg" {
 resource "aws_security_group" "ml_sg" {
   name        = "${var.project_name}-${var.environment}-ml-sg"
   description = "Security group for ML Inference EC2"
-  vpc_id      = aws_vpc.main_vpc.id
+  vpc_id      = module.network.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-ml-sg"

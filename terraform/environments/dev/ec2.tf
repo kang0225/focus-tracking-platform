@@ -38,7 +38,7 @@ data "aws_ami" "ubuntu_2204_arm64" {
 # 1. 앱 서버 — Fargate로 전환됨 (EC2/ASG 없음)
 # ====================================================
 # 과거: 단일 EC2 -> Launch Template + ASG (24_capacity_provider.tf, 삭제됨)
-# 현재: ECS Fargate (13_ecs.tf service의 launch_type = "FARGATE")
+# 현재: ECS Fargate (ecs.tf service의 launch_type = "FARGATE")
 #       blue/green 배포 중 Capacity Provider 미확장 이슈 해결 위해 전환
 # 참고: ECS-optimized AMI(ecs_ami_arm) 데이터소스는 앱 EC2 제거로 더 이상 쓰이지 않아 삭제함
 #       (ML EC2는 아래처럼 Ubuntu ARM AMI를 사용)
@@ -49,7 +49,7 @@ data "aws_ami" "ubuntu_2204_arm64" {
 resource "aws_instance" "ml_ec2" {
   ami                    = data.aws_ami.ubuntu_2204_arm64.id
   instance_type          = "t4g.small"
-  subnet_id              = aws_subnet.private_app_a.id
+  subnet_id              = module.network.private_app_subnet_a_id
   vpc_security_group_ids = [aws_security_group.ml_sg.id]
   ebs_optimized          = true
 

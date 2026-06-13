@@ -149,7 +149,7 @@ resource "aws_flow_log" "main" {
   iam_role_arn    = aws_iam_role.flow_log.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow.arn
   traffic_type    = "REJECT" # ACCEPT는 너무 많음. REJECT만 기록.
-  vpc_id          = aws_vpc.main_vpc.id
+  vpc_id          = module.network.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-vpc-flow-log"

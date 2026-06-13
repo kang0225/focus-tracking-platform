@@ -26,14 +26,14 @@ locals {
 
 ##############################################################
 #### 1. Fargate (ECS Service) — Scheduled Scaling
-####    19_autoscaling.tf 의 scalable target 에 시간 기반 액션 추가
+####    autoscaling.tf 의 scalable target 에 시간 기반 액션 추가
 ##############################################################
 
 # 밤: task 0개로 (min/max 모두 0이어야 desired 가 0까지 내려감)
 resource "aws_appautoscaling_scheduled_action" "ecs_scale_down_night" {
   name = "${var.project_name}-${var.environment}-ecs-down-night"
 
-  # 19_autoscaling.tf 의 scalable target 을 그대로 가리킴 (대상 = ECS Service DesiredCount)
+  # autoscaling.tf 의 scalable target 을 그대로 가리킴 (대상 = ECS Service DesiredCount)
   service_namespace  = aws_appautoscaling_target.ecs_service.service_namespace # ecs를 관리하는 Auto Scaling
   resource_id        = aws_appautoscaling_target.ecs_service.resource_id       # "service/cluster-name/service-name"
   scalable_dimension = aws_appautoscaling_target.ecs_service.scalable_dimension

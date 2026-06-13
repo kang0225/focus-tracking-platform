@@ -110,7 +110,7 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
   })
 }
 
-# 13_ecs.tf의 aws_cloudwatch_log_group.app을 Firehose로 구독
+# ecs.tf의 aws_cloudwatch_log_group.app을 Firehose로 구독
 resource "aws_cloudwatch_log_subscription_filter" "ecs_to_firehose" {
   name            = "${var.project_name}-${var.environment}-ecs-to-firehose"
   log_group_name  = aws_cloudwatch_log_group.app.name

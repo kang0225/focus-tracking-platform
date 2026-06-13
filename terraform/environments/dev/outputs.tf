@@ -31,7 +31,7 @@ output "acm_certificate_arn" {
 }
 
 output "s3_endpoint_id" {
-  value = aws_vpc_endpoint.s3.id
+  value = module.network.s3_vpc_endpoint_id
 }
 
 output "postgres_endpoint" {
@@ -55,7 +55,7 @@ output "postgres_master_user_secret_arn" {
   sensitive   = true
 }
 
-# [DISABLED 2026-06-02] Grafana 비활성화 — 27_grafana.tf.disabled 참고. 재활성화 시 주석 해제.
+# [DISABLED 2026-06-02] Grafana 비활성화 — grafana.tf.disabled 참고. 재활성화 시 주석 해제.
 /*
 output "grafana_workspace_endpoint" {
   description = "Amazon Managed Grafana 워크스페이스 접속 URL"
