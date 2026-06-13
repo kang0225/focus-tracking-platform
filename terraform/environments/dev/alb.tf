@@ -8,8 +8,8 @@ resource "aws_lb" "app" {
   security_groups    = [aws_security_group.alb_sg.id]
 
   subnets = [
-    aws_subnet.public_a.id,
-    aws_subnet.public_c.id,
+    module.network.public_subnet_a_id,
+    module.network.public_subnet_c_id,
   ]
 
   # ★ 추가: Access Logs를 S3에 직접 저장 (패턴 A)

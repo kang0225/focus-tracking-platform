@@ -7,7 +7,7 @@ resource "aws_lb_target_group" "blue" {
   name     = "${var.project_name}-tg-blue"
   port     = 3000
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main_vpc.id
+  vpc_id   = module.network.vpc_id
 
   # ECS awsvpc 모드에서는 반드시 'ip' 타입을 사용해야 합니다.
   target_type = "ip"
@@ -38,7 +38,7 @@ resource "aws_lb_target_group" "green" {
   name        = "${var.project_name}-tg-green"
   port        = 3000
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main_vpc.id
+  vpc_id      = module.network.vpc_id
   target_type = "ip"
 
   health_check {

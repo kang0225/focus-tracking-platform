@@ -147,8 +147,8 @@ resource "aws_ecs_service" "app" {
   network_configuration {
     # task ENI가 생길 서브넷 (프라이빗 앱 서브넷)
     subnets = [
-      aws_subnet.private_app_a.id,
-      aws_subnet.private_app_c.id
+      module.network.private_app_subnet_a_id,
+      module.network.private_app_subnet_c_id
     ]
     # task ENI에 붙일 SG (web_sg 재사용 - 이미 ALB→3000 ingress 있음)
     security_groups = [aws_security_group.web_sg.id]

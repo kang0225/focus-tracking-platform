@@ -11,8 +11,8 @@ resource "aws_db_subnet_group" "postgres" {
   description = "Private DB subnet group for PostgreSQL RDS"
 
   subnet_ids = [
-    aws_subnet.private_db_a.id,
-    aws_subnet.private_db_c.id,
+    module.network.private_db_subnet_a_id,
+    module.network.private_db_subnet_c_id,
   ]
 
   tags = {
