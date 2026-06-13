@@ -1,4 +1,4 @@
-# 🎯 Focus Tracking Platform
+#  Focus Tracking Platform
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -12,11 +12,11 @@
 > WebGazer.js 시선 추적과 FacePhys ONNX 기반 원격 심박수 측정(rPPG)을 결합해
 > 분 단위 집중도를 계산하고, AWS Bedrock(Claude)으로 학습 습관 피드백까지 제공합니다.
 >
-> 🌐 **서비스**: [study-room.click](https://study-room.click)
+>  **서비스**: [study-room.click](https://study-room.click)
 
 ---
 
-## 📋 목차
+##  목차
 
 - [주요 기능](#-주요-기능)
 - [아키텍처 개요](#️-아키텍처-개요)
@@ -33,28 +33,28 @@
 
 ---
 
-## ✨ 주요 기능
+##  주요 기능
 
 | 기능 | 설명 |
 | --- | --- |
-| 🎯 **실시간 시선 추적** | WebGazer.js 기반 웹캠 시선 감지 + 캘리브레이션, 시선 히트맵 생성 |
-| 🫀 **원격 심박수 측정 (rPPG)** | FacePhys ONNX 모델로 웹캠 영상에서 BPM 추정 (`onnxruntime-node`, 서버 추론) |
-| 📊 **분 단위 집중도 분석** | 시선 이탈률 + 심박/rPPG 추세를 결합해 `focus_score`·집중 상태·추세 산출 |
-| 🤖 **AI 학습 피드백** | 분석 결과를 AWS Bedrock **Claude Sonnet 4.5**로 요약한 자연어 학습 습관 피드백 |
-| 👥 **실시간 학습 룸** | WebRTC 시그널링 기반 룸 생성·초대·매칭, 참가자 하트비트 |
-| 🏆 **랭킹** | 집중 결과 기반 사용자 랭킹 |
-| 🔐 **Google OAuth 인증** | Google OAuth 2.0 로그인 + 자체 세션(`AUTH_SECRET`) |
+| **실시간 시선 추적** | WebGazer.js 기반 웹캠 시선 감지 + 캘리브레이션, 시선 히트맵 생성 |
+| **원격 심박수 측정 (rPPG)** | FacePhys ONNX 모델로 웹캠 영상에서 BPM 추정 (`onnxruntime-node`, 서버 추론) |
+| **분 단위 집중도 분석** | 시선 이탈률 + 심박/rPPG 추세를 결합해 `focus_score`·집중 상태·추세 산출 |
+| **AI 학습 피드백** | 분석 결과를 AWS Bedrock **Claude Sonnet 4.5**로 요약한 자연어 학습 습관 피드백 |
+| **실시간 학습 룸** | WebRTC 시그널링 기반 룸 생성·초대·매칭, 참가자 하트비트 |
+| **랭킹** | 집중 결과 기반 사용자 랭킹 |
+| **Google OAuth 인증** | Google OAuth 2.0 로그인 + 자체 세션(`AUTH_SECRET`) |
 
 ---
 
-## 🏗️ 아키텍처 개요
+## 아키텍처 개요
 
 서울 리전(`ap-northeast-2`)의 2-AZ VPC 위에 **ECS Fargate(앱) + EC2(ML/Redis) + RDS PostgreSQL** 로 구성되어 있습니다.
 인프라 상세(서브넷·보안그룹·배포·관측성)와 전체 다이어그램은 **[인프라 문서 → `terraform/README.md`](terraform/README.md)** 를 참고하세요.
 
 ```mermaid
 flowchart LR
-    user["👤 사용자<br/>브라우저 + 웹캠"]
+    user["사용자<br/>브라우저 + 웹캠"]
 
     subgraph edge["DNS / 엣지"]
         r53["Route 53<br/>study-room.click"]
@@ -109,7 +109,7 @@ sequenceDiagram
 
 ---
 
-## 🧰 기술 스택
+## 기술 스택
 
 ### 프론트엔드 + 백엔드 (`backend/` · 단일 Next.js 컨테이너)
 
@@ -155,7 +155,7 @@ focus-tracking-platform/
 ├── backend/                     # Next.js 앱 (프론트엔드 + API) — ECS Fargate 배포
 │   ├── src/
 │   │   ├── app/                 # App Router 페이지 + API Routes
-│   │   │   ├── api/             # auth · rppg · rooms · tracking · ranking · heartrate · pair · health
+│   │   │   ├── api/             # auth · rppg · rooms · rtc · tracking · ranking · heartrate · pair · health
 │   │   │   ├── dashboard/  room/  tracker/  result/
 │   │   │   └── page.tsx
 │   │   ├── components/          # WebcamView, GazeDashboard, 캘리브레이션 등
@@ -178,7 +178,8 @@ focus-tracking-platform/
 │
 ├── terraform/                   # AWS 인프라 (IaC) — 상세: terraform/README.md
 │   ├── bootstrap/               # 원격 상태용 S3 + DynamoDB
-│   └── environments/dev/        # 00_outputs ~ 26_postgres_rds (+ Datadog)
+│   ├── modules/network/         # VPC·서브넷·라우팅·NACL·NAT·S3 엔드포인트 (재사용 모듈)
+│   └── environments/dev/        # dev 스택: network 모듈 호출 + 컴퓨팅·배포·관측성
 │
 ├── .github/workflows/           # backend.yml · ml-service.yml · terraform.yml
 ├── scripts/                     # checkov.sh(IaC 보안 스캔) · monitoring.sh
@@ -188,7 +189,7 @@ focus-tracking-platform/
 
 ---
 
-## 💻 로컬 개발 환경
+## 로컬 개발 환경
 
 ### 필수 요구사항
 
@@ -228,7 +229,7 @@ docker compose up -d   # FastAPI(:8000) + Redis(:6379) 동시 기동
 
 ---
 
-## 🔑 환경 변수
+## 환경 변수
 
 ### 백엔드 (`backend/.env.local`)
 
@@ -253,7 +254,7 @@ REDIS_STREAM_MAXLEN=10800
 # ML 서비스
 ML_SERVICE_URL=http://localhost:8000
 
-# WebRTC ICE 서버
+# WebRTC ICE 서버 — 런타임에 GET /api/rtc/config 로 클라이언트에 제공(미설정 시 STUN 기본값)
 # 서로 다른 네트워크/NAT 환경의 화상 연결에는 TURN 서버를 함께 설정하세요.
 RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"user","credential":"pass"}]'
 ```
@@ -272,7 +273,7 @@ RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.exa
 
 ---
 
-## 🔌 API 개요
+## API 개요
 
 ### 백엔드 (Next.js API Routes, `/api/*`)
 
@@ -284,6 +285,7 @@ RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.exa
 | 심박수 | `heartrate` | 심박수 스트리밍 |
 | 추적 | `tracking/sessions`, `tracking/stream`, `tracking/jobs[/:id]` | 학습 세션·스트림·분석 잡 |
 | 룸 | `rooms/match`, `rooms/invite`, `rooms/signal`, `rooms/events`, `rooms/heartbeat`, `rooms/leave` | 실시간 룸/WebRTC 시그널링 |
+| WebRTC | `rtc/config` | ICE(STUN/TURN) 서버 설정을 런타임에 제공 (NAT 통과) |
 | 페어링 | `pair/generate`, `pair/status`, `pair/current` | 기기 페어링 |
 | 랭킹 | `ranking`, `ranking/me` | 집중 랭킹 |
 | 헬스 | `health` | ALB 헬스체크 (`/api/health`) |
@@ -298,7 +300,7 @@ RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.exa
 
 ---
 
-## 🫀 FacePhys rPPG 심박수 측정
+## FacePhys rPPG 심박수 측정
 
 웹캠 영상에서 원격 광용적맥파(rPPG, Remote Photoplethysmography)를 추출해 **하드웨어 없이 심박수**를 추정합니다.
 
@@ -309,7 +311,7 @@ RTC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.exa
 
 ---
 
-## ☁️ 배포 & CI/CD
+## 배포 & CI/CD
 
 GitHub Actions(모두 **OIDC 인증**, 정적 키 미사용, `ap-northeast-2`)에서 경로 기반으로 트리거됩니다.
 
@@ -342,12 +344,14 @@ flowchart LR
 
 ---
 
-## 📈 모니터링
+## 모니터링
 
 - **CloudWatch Alarms → SNS(이메일)**: ALB 5xx 급증, ECS 실행 Task 부족, ECS CPU 80%↑, ALB 응답시간 2초↑
+- **Datadog → Slack**: ML EC2 스로틀링 위험(CPU 사용률↑ **AND** t4g CPU 크레딧 소진) composite 알림
 - **로그**: ECS 앱 로그(CloudWatch) → Firehose → S3 장기 보관(GZIP, 날짜 파티션), VPC Flow Logs(REJECT), RDS 로그
 - **Datadog**: AWS 통합(메트릭·트레이스·로그 포워딩, CSPM)
 - **ALB Access Logs**: S3 보관(라이프사이클: 30일 후 Glacier IR, 90일 만료)
+- **야간 비용 절감(dev)**: Auto Scaling/EventBridge 스케줄러로 22:00 KST ECS Task·ML EC2 정지 → 09:00 자동 기동
 
 ```bash
 # ECS 앱 로그 실시간 확인
@@ -356,13 +360,13 @@ aws logs tail /ecs/focus-tracking-platform-dev --follow --region ap-northeast-2
 
 ---
 
-## 🤝 기여
+## 기여
 
 1. Feature 브랜치 생성: `git checkout -b feature/foo` (버그는 `fix/foo`)
 2. 변경 + 테스트, **Conventional Commits** 사용
 3. Pull Request 생성 → 리뷰 → `main` 병합 (경로별 워크플로가 자동 배포)
 
-## 📄 라이선스
+## 라이선스
 
 [MIT](LICENSE) 라이선스 하에 배포됩니다.
 

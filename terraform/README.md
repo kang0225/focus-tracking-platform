@@ -1,4 +1,4 @@
-# 🏗️ Infrastructure — Focus Tracking Platform
+# Infrastructure — Focus Tracking Platform
 
 이 문서는 [Focus Tracking Platform](../README.md)의 **AWS 인프라(Terraform IaC)** 를 다룹니다.
 모든 리소스는 서울 리전(`ap-northeast-2`) 2-AZ 위에 코드로 정의되어 있으며, 상태는 S3 + DynamoDB에 원격 저장됩니다.
@@ -8,15 +8,15 @@
 - **배포**: CodeDeploy Blue/Green · GitHub Actions(OIDC)
 - **관측성**: CloudWatch · SNS · Datadog
 
-> 📂 모든 Terraform 코드: [`terraform/environments/dev/`](environments/dev/) · 원격 상태 부트스트랩: [`terraform/bootstrap/`](bootstrap/)
+> 환경 스택: [`terraform/environments/dev/`](environments/dev/) · 재사용 모듈: [`terraform/modules/`](modules/) · 원격 상태 부트스트랩: [`terraform/bootstrap/`](bootstrap/)
 
 ---
 
-## 📐 전체 아키텍처
+## 전체 아키텍처
 
 ```mermaid
 flowchart TB
-    user["👤 사용자<br/>브라우저 + 웹캠"]
+    user["사용자<br/>브라우저 + 웹캠"]
     gh["GitHub Actions<br/>(OIDC)"]
 
     subgraph aws["AWS · ap-northeast-2 (Seoul)"]
@@ -87,7 +87,7 @@ flowchart TB
 
 ---
 
-## 🔁 요청 흐름
+## 요청 흐름
 
 1. 사용자가 `https://study-room.click` 접속 → **Route 53** 가 **ALB** 로 alias.
 2. **ALB**(HTTPS 443, ACM 인증서)가 80→443 리다이렉트 후 **ECS Fargate**(Next.js :3000)로 포워딩.
@@ -97,7 +97,7 @@ flowchart TB
 
 ---
 
-## 🚀 배포 — CodeDeploy Blue/Green
+## 배포 — CodeDeploy Blue/Green
 
 `launch_type = FARGATE` + `deployment_controller = CODE_DEPLOY` 조합으로, 배포 시 신버전(Green) Task를 띄워 헬스체크를 통과하면 ALB 리스너 트래픽을 전환합니다. 실패 시 자동 롤백됩니다.
 
@@ -131,7 +131,9 @@ sequenceDiagram
 
 ---
 
-## 🌐 네트워크
+## 네트워크
+
+VPC·서브넷·라우팅·NACL·NAT·S3 엔드포인트는 재사용 가능한 **[`modules/network`](modules/network/)** 모듈로 분리되어 있고, [`environments/dev/network.tf`](environments/dev/network.tf)가 환경별 CIDR·AZ·포트 값을 넘겨 호출합니다.
 
 ### 서브넷 (VPC `10.0.0.0/16`, AZ `ap-northeast-2a` / `2c`)
 
@@ -163,12 +165,12 @@ sequenceDiagram
 
 ---
 
-## 🖥️ 컴퓨팅
+## 컴퓨팅
 
 ### ECS Fargate (애플리케이션)
 
 - **리소스**: 1 vCPU / 2 GB, **ARM64**(Graviton), `awsvpc` 네트워크 모드
-- **오토스케일링**: Application Auto Scaling — ECS 평균 CPU 사용률 타깃 트래킹으로 Task 수 자동 조정 ([`19_autoscaling.tf`](environments/dev/19_autoscaling.tf))
+- **오토스케일링**: Application Auto Scaling — ECS 평균 CPU **75%** 타깃 트래킹으로 Task **1→2개** 자동 조정(scale-out 쿨다운 60s / scale-in 300s). Fargate는 EC2 CPU 크레딧/baseline 개념이 없어 타깃을 보수적으로 낮출 필요가 없습니다 ([`autoscaling.tf`](environments/dev/autoscaling.tf))
 - **헬스체크**: ALB → `/api/health`
 - 앱(FE+BE)이 **단일 컨테이너**로 묶여 있어 배포·운영이 단순합니다.
 
@@ -181,9 +183,17 @@ sequenceDiagram
 
 > 구버전 앱 EC2/ASG·Capacity Provider는 Fargate 전환으로 제거되었습니다.
 
+### 야간 비용 절감 스케줄러 (dev 전용)
+
+낮에만 개발하므로 야간에는 컴퓨팅을 0으로 내립니다 ([`scheduler.tf`](environments/dev/scheduler.tf)). 시각은 `local`에서 한 곳(KST)으로 관리합니다.
+
+- **Fargate**: Application Auto Scaling **Scheduled Action** — 22:00 KST `min/max=0`(Task 0개) → 09:00 `min1/max2` 복구
+- **ML EC2**: **EventBridge Scheduler**(AWS SDK universal target, Lambda 불필요)로 22:00 정지 / 09:00 기동 — 컨테이너는 `restart: unless-stopped`라 부팅 시 자동 복구
+- 전용 IAM Role에 해당 ML 인스턴스 ARN만 `Start/StopInstances` 허용(최소 권한)
+
 ---
 
-## 🗄️ 데이터베이스 (RDS for PostgreSQL)
+## 데이터베이스 (RDS for PostgreSQL)
 
 | 항목 | 설정 |
 | --- | --- |
@@ -199,7 +209,7 @@ sequenceDiagram
 
 ---
 
-## 📊 관측성
+## 관측성
 
 - **CloudWatch Alarms → SNS(이메일 구독)**
   | 알람 | 조건 |
@@ -211,13 +221,20 @@ sequenceDiagram
 - **로그 파이프라인**: ECS 앱 로그(CloudWatch) → **Kinesis Firehose** → **S3**(GZIP·날짜 파티션) 장기 보관
 - **ALB Access Logs**: S3 직접 저장(라이프사이클: 30일 후 Glacier IR, 90일 만료, 버저닝/암호화/퍼블릭 차단)
 - **Datadog**: AWS 통합(메트릭·X-Ray 트레이스·Lambda 로그 포워딩·CSPM)
+- **Datadog → Slack 알림**: ML EC2(t4g) **스로틀링 위험**을 composite 모니터로 통지 ([`datadog_monitors.tf`](environments/dev/datadog_monitors.tf))
+  | 입력 모니터 | 조건 |
+  | --- | --- |
+  | CPU 사용률 | 5분 평균 > 80% |
+  | CPU 크레딧 잔량 | 10분 평균 < 50 |
+
+  두 조건이 **동시에** 충족(부하↑ + 크레딧 소진 = baseline 스로틀링 임박)될 때만 composite가 Slack으로 알림 → 입력 모니터는 단독 통지하지 않아 노이즈/중복을 억제합니다.
 - ECS **Container Insights** 활성화
 
-> Amazon Managed Grafana 구성([`27_grafana.tf.disabled`])은 Datadog로 일원화하며 **비활성화** 상태입니다.
+> Amazon Managed Grafana 구성([`grafana.tf.disabled`])은 Datadog로 일원화하며 **비활성화** 상태입니다.
 
 ---
 
-## 🔐 보안
+## 보안
 
 - **GitHub OIDC** — CI/CD에서 장기 액세스 키 없이 IAM Role을 Assume
 - **Secrets Manager** — RDS 비밀번호(코드/환경변수에 평문 없음)
@@ -238,10 +255,11 @@ sequenceDiagram
 
 ---
 
-## 💰 비용 최적화 포인트
+## 비용 최적화 포인트
 
 | 결정 | 효과 |
 | --- | --- |
+| **야간 스케줄러 (dev)** | 22:00~09:00 KST ECS Task·ML EC2 정지 → 비업무 시간 컴퓨팅 비용 0 |
 | **단일 NAT Gateway** | AZ별 2개 대비 NAT 시간/처리 비용 절감 (가용성과 트레이드오프) |
 | **ARM64/Graviton** (Fargate ARM · `t4g`) | 동급 x86 대비 가격·전력 효율 |
 | **ECR 라이프사이클** | 최근 5개 이미지만 보관 → 스토리지 비용 억제 |
@@ -252,7 +270,7 @@ sequenceDiagram
 
 ---
 
-## 🛠️ Terraform 사용법
+## Terraform 사용법
 
 ### 1) 원격 상태 부트스트랩 (최초 1회)
 
@@ -281,33 +299,44 @@ terraform apply
 | `domain_name` | `study-room.click` (Route 53 호스팅 영역 존재 필요) |
 | `postgres_master_username` | GitHub **Secret** |
 | `datadog_api_key` / `datadog_app_key` | GitHub **Secret** (`sensitive`) |
+| `datadog_slack_account_name` / `datadog_slack_channel` | `ICE6141` / `#focus-alerts` (Slack 알림 대상, UI에서 OAuth 연결 필요) |
 | `alert_emails` | SNS 알람 수신 목록 |
 
 > CI(`.github/workflows/terraform.yml`)는 `main` push 시 `fmt → init → plan → apply` 를 OIDC 인증으로 실행합니다.
 
 ---
 
-## 🗂️ 파일 맵 (`environments/dev/`)
+## 파일 맵
+
+### `modules/network/` — 네트워크 모듈
 
 | 파일 | 내용 |
 | --- | --- |
-| `01_versions.tf` · `02_provider.tf` | Terraform/Provider 버전, AWS·Datadog 프로바이더 |
-| `03_variables.tf` · `00_outputs.tf` | 변수 정의 · 출력값 |
-| `04_vpc.tf` · `05_subnet.tf` | VPC/IGW · 6개 서브넷 |
-| `06_sg.tf` · `08_nacl.tf` | 보안 그룹 · NACL |
-| `07_routeTable.tf` · `12_nat.tf` | 라우팅 테이블 · NAT Gateway/EIP |
-| `09_ec2.tf` | ML EC2 (앱 EC2는 제거됨) |
-| `10_ecr.tf` | ECR(app · ml-service) + 라이프사이클 |
-| `11_iam.tf` | 서비스별 IAM Role/정책 |
-| `13_ecs.tf` · `19_autoscaling.tf` | ECS 클러스터/서비스/Task Def · 오토스케일링 |
-| `14_codedeploy.tf` · `15_tg.tf` | CodeDeploy Blue/Green · 타깃그룹 |
-| `16_alb.tf` · `17_route53.tf` · `18_acm.tf` | ALB/리스너 · DNS · TLS 인증서 |
-| `20_vpc_endpoint.tf` | S3 Gateway Endpoint |
-| `21_logging.tf` · `23_log_export.tf` | S3 로그 버킷·Flow Logs · 로그→Firehose→S3 |
-| `22_alarm.tf` | CloudWatch 알람 + SNS |
-| `25_datadog.tf` · `26_postgres_rds.tf` | Datadog 연동 · RDS PostgreSQL |
+| `vpc.tf` · `subnet.tf` | VPC/IGW · 6개 서브넷(퍼블릭·App·DB × 2 AZ) |
+| `route_table.tf` · `nat.tf` | 라우팅 테이블 · NAT Gateway/EIP |
+| `nacl.tf` · `vpc_endpoint.tf` | NACL · S3 Gateway Endpoint |
+| `variables.tf` · `outputs.tf` · `versions.tf` | 모듈 입력 변수 · 출력(VPC/서브넷/RT ID 등) · 버전 제약 |
 
-> `24_capacity_provider.tf`(EC2 ASG)는 Fargate 전환으로 **삭제**, `27_grafana.tf.disabled`는 **비활성화** 상태입니다.
+### `environments/dev/` — dev 환경 스택
+
+| 파일 | 내용 |
+| --- | --- |
+| `versions.tf` · `provider.tf` | Terraform/Provider 버전, AWS·Datadog 프로바이더 |
+| `variables.tf` · `outputs.tf` | 변수 정의 · 출력값 |
+| `network.tf` | **`modules/network` 호출** (VPC/서브넷/라우팅/NACL/NAT/엔드포인트) |
+| `sg.tf` | 보안 그룹 (`alb` · `web` · `db` · `ml`) |
+| `ec2.tf` | ML EC2 (앱 EC2는 제거됨) |
+| `ecr.tf` · `iam.tf` | ECR(app · ml-service) + 라이프사이클 · 서비스별 IAM Role/정책 |
+| `ecs.tf` · `autoscaling.tf` | ECS 클러스터/서비스/Task Def · CPU 타깃 오토스케일링 |
+| `scheduler.tf` | 야간 비용 절감 (ECS Scheduled Action + ML EC2 stop/start) |
+| `codedeploy.tf` · `tg.tf` | CodeDeploy Blue/Green · 타깃그룹 |
+| `alb.tf` · `route53.tf` · `acm.tf` | ALB/리스너 · DNS · TLS 인증서 |
+| `logging.tf` · `log_export.tf` | S3 로그 버킷·Flow Logs · 로그→Firehose→S3 |
+| `alarm.tf` | CloudWatch 알람 + SNS |
+| `datadog.tf` · `datadog_monitors.tf` | Datadog AWS 연동 · ML EC2 스로틀링 Slack 모니터 |
+| `postgres_rds.tf` | RDS PostgreSQL |
+
+> 파일명에서 숫자 접두사(`01_`~`26_`)를 제거하고 네트워크 리소스를 `modules/network`로 분리했습니다. `capacity_provider.tf`(EC2 ASG)는 Fargate 전환으로 **삭제**, `grafana.tf.disabled`는 **비활성화** 상태입니다.
 
 ---
 
