@@ -1,18 +1,12 @@
-name: Terraform
+name: Terraform Destroy (dev)
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'terraform/environments/dev/**'
-      - '.github/workflows/**'
+  workflow_dispatch: # 수동 트리거
 
 permissions:
   id-token: write
   contents: read
 
-# destroy 워크플로우(terraform-destroy.yml)와 같은 group 을 공유.
-# apply 되는 중에 destroy를 수동 실행하면 충돌이 발생할 수 있기 때문에 안전장치 설치.
 concurrency:
   group: terraform-dev
   cancel-in-progress: false
@@ -23,7 +17,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_CLI_ARGS: "-no-color"
-  TF_CLI_ARGS_apply: "-lock-timeout=5m"
+  TF_CLI_ARGS_destroy: "-lock-timeout=5m"
 
   TF_VAR_aws_region: ap-northeast-2
   TF_VAR_project_name: focus-tracking-platform
@@ -45,8 +39,12 @@ env:
   TF_VAR_postgres_master_username: ${{ secrets.POSTGRES_MASTER_USERNAME }}
 
 jobs:
-  terraform:
+  destroy:
     runs-on: ubuntu-latest
+
+    ############## 환경 ###############
+    environment: dev
+    ##################################
 
     defaults:
       run:
@@ -65,15 +63,11 @@ jobs:
       - name: Terraform 설치
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Fmt
-        run: terraform fmt -check -diff -recursive
-
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan
+      - name: Terraform Plan (destroy)
+        run: terraform plan -destroy
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
