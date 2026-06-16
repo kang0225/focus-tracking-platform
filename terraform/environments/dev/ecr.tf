@@ -7,6 +7,9 @@ resource "aws_ecr_repository" "app" {
   # 레포지토리 이름
   name = "${var.project_name}-repo"
 
+  # 이미지가 남아있어도 destroy 시 레포를 강제로 삭제
+  force_delete = true
+
   # MUTABLE은 같은 태그로 이미지를 여러 번 덮어씌울 수 있게 해줌
   # 개발 단계에서는 편의를 위해 보통 MUTABLE을 사용해.
   image_tag_mutability = "MUTABLE"
@@ -56,6 +59,9 @@ resource "aws_ecr_lifecycle_policy" "app_policy" {
 resource "aws_ecr_repository" "ml_service" {
   name                 = "${var.project_name}-ml-service-repo"
   image_tag_mutability = "MUTABLE"
+
+  # 이미지가 남아있어도 destroy 시 레포를 강제로 삭제
+  force_delete = true
 
   image_scanning_configuration {
     scan_on_push = true

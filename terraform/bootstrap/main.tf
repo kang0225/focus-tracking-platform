@@ -76,9 +76,13 @@ data "aws_iam_policy_document" "github_actions_assume_role_policy" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
+        # apply (main 브랜치 push): sub 가 ref 기반으로 발급된다.
+        "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.github_branch}",
+        # destroy (workflow_dispatch + environment: dev): job 이 environment 를 참조하면
+        # GitHub OIDC 가 sub 를 ref 가 아닌 environment:<name> 형태로 발급하므로 별도로 허용한다.
+        "repo:${var.github_org}/${var.github_repo}:environment:${var.environment}",
       ]
-    } # 조건 2 : 특정 레포지토리, 경로, 브랜치에서 온 토큰만 허용
+    } # 조건 2 : 특정 레포지토리, 경로, 브랜치/환경에서 온 토큰만 허용
   }
 }
 
@@ -319,10 +323,11 @@ data "aws_iam_policy_document" "github_actions_permissions_policy_document_2" {
       "s3:PutBucketVersioning",
       "s3:PutEncryptionConfiguration",
       "s3:PutBucketPublicAccessBlock",
-      "s3:PutBucketLifecycleConfiguration", "s3:DeleteBucketLifecycle",
+      "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration",
       "s3:PutBucketLogging",
       "s3:PutBucketTagging",
-      "s3:PutObject",
+      # force_destroy 로 버킷을 비울 때 객체와 버전을 모두 지워야 한다 (versioning 활성화 버킷)
+      "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion",
     ]
 
     resources = ["*"]

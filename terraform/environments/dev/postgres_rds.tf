@@ -45,9 +45,9 @@ resource "aws_db_instance" "postgres" {
   maintenance_window         = "sun:19:00-sun:20:00"              # AWS가 패치 내용이 생기면 업데이트할 시간대
   auto_minor_version_upgrade = true                               # AWS가 패치해도 되는지 여부. 패치 일정을 따로 관리하려면 False 권장.
 
-  copy_tags_to_snapshot = true # 태그를 스냅샷에 씀.
-  deletion_protection   = true # destory나 삭제 실수 방지
-  skip_final_snapshot   = true # DB 삭제 시 최종적인 스냅샷을 생성
+  copy_tags_to_snapshot = true  # 태그를 스냅샷에 씀.
+  deletion_protection   = false # destroy 가능하도록 해제 (운영 전환 시 true로 복구)
+  skip_final_snapshot   = true  # DB 삭제 시 최종적인 스냅샷을 생성
   apply_immediately     = false
 
   enabled_cloudwatch_logs_exports = [

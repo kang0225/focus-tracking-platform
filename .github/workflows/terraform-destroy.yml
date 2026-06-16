@@ -69,5 +69,14 @@ jobs:
       - name: Terraform Plan (destroy)
         run: terraform plan -destroy
 
+      # deletion_protection 은 AWS 에 저장된 상태값이라 코드를 false 로 바꿔도
+      # apply 가 없으면 반영되지 않는다. destroy 직전에 직접 해제해야 DeleteDBInstance 가 통과한다.
+      - name: RDS 삭제 보호 해제
+        continue-on-error: true # 이미 RDS 가 없는 재실행 대비
+        run: |
+          aws rds modify-db-instance \
+            --db-instance-identifier "${TF_VAR_project_name}-${TF_VAR_environment}-postgres" \
+            --no-deletion-protection --apply-immediately
+
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
