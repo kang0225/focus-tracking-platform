@@ -14,22 +14,27 @@
 >
 >  **서비스**: [study-room.click](https://study-room.click)
 
+<p align="center">
+  <img src="docs/screenshots/home-dashboard.png" alt="Focus Tracking 홈 대시보드" width="900">
+</p>
+
 ---
 
 ##  목차
 
-- [주요 기능](#-주요-기능)
-- [아키텍처 개요](#️-아키텍처-개요)
-- [기술 스택](#-기술-스택)
+- [주요 기능](#주요-기능)
+- [미리보기](#-미리보기)
+- [아키텍처 개요](#아키텍처-개요)
+- [기술 스택](#기술-스택)
 - [모노레포 구조](#-모노레포-구조)
-- [로컬 개발 환경](#-로컬-개발-환경)
-- [환경 변수](#-환경-변수)
-- [API 개요](#-api-개요)
-- [FacePhys rPPG 심박수 측정](#-facephys-rppg-심박수-측정)
-- [배포 & CI/CD](#️-배포--cicd)
-- [모니터링](#-모니터링)
-- [기여](#-기여)
-- [라이선스](#-라이선스)
+- [로컬 개발 환경](#로컬-개발-환경)
+- [환경 변수](#환경-변수)
+- [API 개요](#api-개요)
+- [FacePhys rPPG 심박수 측정](#facephys-rppg-심박수-측정)
+- [배포 & CI/CD](#배포--cicd)
+- [모니터링](#모니터링)
+- [기여](#기여)
+- [라이선스](#라이선스)
 
 ---
 
@@ -44,6 +49,37 @@
 | **실시간 학습 룸** | WebRTC 시그널링 기반 룸 생성·초대·매칭, 참가자 하트비트 |
 | **랭킹** | 집중 결과 기반 사용자 랭킹 |
 | **Google OAuth 인증** | Google OAuth 2.0 로그인 + 자체 세션(`AUTH_SECRET`) |
+
+---
+
+## 📸 미리보기
+
+### 세션 분석 결과
+
+시선 분포 히트맵 · 분 단위 집중도 흐름 · 심박수 분석을 한 화면에서 확인합니다.
+
+![세션 분석 결과 대시보드](docs/screenshots/result-dashboard.png)
+
+### AI 학습 코치 피드백
+
+AWS Bedrock의 Claude가 세션 데이터를 자연어 학습 습관 피드백으로 요약합니다.
+
+![AI 학습 코치 피드백](docs/screenshots/ai-feedback.png)
+
+### Apple Watch 연동
+
+iPhone에서 발급한 6자리 페어링 코드로 Apple Watch 심박수를 브라우저 대시보드에 실시간 전송합니다.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/iphone-app.png" alt="iPhone 페어링 화면" width="260"></td>
+    <td align="center"><img src="docs/screenshots/apple-watch.png" alt="Apple Watch 심박 측정" width="230"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>iPhone · 브라우저 페어링</sub></td>
+    <td align="center"><sub>Apple Watch · 심박 측정</sub></td>
+  </tr>
+</table>
 
 ---
 
